@@ -72,6 +72,18 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.hidden = true; }, undo ? 5000 : 2200);
   }
+  // Text boxes grow to fit their text, so a long note is never squeezed into a
+  // small scrolling box.
+  function autoGrow(ta, min) {
+    function fit() {
+      ta.style.height = 'auto';
+      ta.style.height = Math.max(min, ta.scrollHeight + 2) + 'px';
+    }
+    ta.addEventListener('input', fit);
+    ta.addEventListener('focus', fit);
+    setTimeout(fit, 0);
+    return fit;
+  }
   function shortText(s) { return s.length > 28 ? s.slice(0, 27) + '\u2026' : s; }
 
   // ---------- data ----------
@@ -1270,6 +1282,7 @@
     var note = el('textarea');
     note.placeholder = 'Notes for this stage';
     note.value = st.note || '';
+    autoGrow(note, 100);
     field('Notes', note).addEventListener('input', function () {
       if (note.value.trim()) st.note = note.value;
       else delete st.note;
@@ -1470,8 +1483,9 @@
       var ta = el('textarea');
       ta.value = n.text;
       box.appendChild(ta);
+      autoGrow(ta, 160);
       var row = el('div', 'note-btns');
-      row.appendChild(btn('Save', 'link', function () {
+      row.appendChild(btn('Save', 'small primary', function () {
         var v = ta.value;
         if (!v.trim()) return;
         n.text = v;
@@ -1479,7 +1493,7 @@
         save();
         renderJob();
       }));
-      row.appendChild(btn('Cancel', 'link', function () { editingNoteId = null; renderJob(); }));
+      row.appendChild(btn('Cancel', 'small', function () { editingNoteId = null; renderJob(); }));
       box.appendChild(row);
       setTimeout(function () { ta.focus(); }, 0);
     } else {
@@ -1503,11 +1517,13 @@
     j.notes.push({ id: uid(), at: nowIso(), text: v });
     if (!save()) return;
     $('noteNew').value = '';
+    fitNoteNew();
     $('noteNew').blur();
     renderJob();
     updateBanner();
   });
   $('prevToggle').addEventListener('change', renderJob);
+  var fitNoteNew = autoGrow($('noteNew'), 90);
 
   function monthHint(j) {
     var isOld = j.status === 'old';

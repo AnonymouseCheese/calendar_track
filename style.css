@@ -292,7 +292,7 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .round-head:first-child { margin-top: 4px; }
 
 .add-note { margin-top: 14px; }
-.add-note textarea { min-height: 80px; }
+.add-note textarea { min-height: 90px; line-height: 1.45; resize: none; }
 .add-note button { margin-top: 8px; width: 100%; }
 
 .notes { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -302,7 +302,7 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .note-text { white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
 .note-btns { display: flex; gap: 14px; margin-top: 4px; }
 .note-btns button { padding: 2px 0; font-size: 14px; }
-.note textarea { margin-top: 6px; min-height: 80px; }
+.note textarea { margin-top: 6px; min-height: 160px; line-height: 1.45; resize: none; }
 
 .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); }
 
@@ -377,7 +377,7 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
   margin-top: 4px; padding: 2px 0 2px 8px; border-left: 3px solid var(--line);
 }
 .st-edit label:has(textarea) { align-items: flex-start; }
-.st-edit textarea { min-height: 70px; padding: 6px 8px; }
+.st-edit textarea { min-height: 100px; padding: 6px 8px; line-height: 1.45; resize: none; }
 .bin-link { display: block; margin: 18px auto 0; }
 .bin-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .bin-btns { display: flex; gap: 8px; margin-top: 10px; }
@@ -424,3 +424,7 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .date-row { display: flex; align-items: center; gap: 6px; }
 .date-row label { flex: 1; min-width: 0; }
 .date-clear { flex: none; padding: 4px 6px; font-size: 14px; }
+
+/* Save / Cancel under a note being edited */
+.note textarea + .note-btns { gap: 8px; margin-top: 8px; }
+.note textarea + .note-btns button { padding: 8px 18px; font-size: 15px; }

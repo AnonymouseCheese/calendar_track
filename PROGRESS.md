@@ -192,6 +192,10 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
       `job.stages`; the timeline is drawn latest-first). The earlier "slot into list order"
       rule looked random to the user, so it was dropped.
 
+- [x] v16: note text boxes grow to fit their text (`autoGrow(ta, min)`): editing a job note
+      (min 160px), Add a note (90px), stage notes (100px). Save / Cancel under an edited note
+      are real buttons, not small links.
+
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code
 - [ ] User does a first backup and test-restores it once

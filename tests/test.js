@@ -181,6 +181,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.evaluate(() => [...document.querySelectorAll('#jobNotes button')].find(b => b.textContent === 'Save').click());
   await wait(100);
   ok((await page.$eval('#jobNotes .note .note-text', e => e.textContent)) === 'Client wants proof by Wed', 'note edited');
+  // editing a long note: the box is big enough to show all of it
+  await page.evaluate(() => [...document.querySelectorAll('#jobNotes button')].find(b => b.textContent === 'Edit').click());
+  await wait(150);
+  const fits = await page.$eval('#jobNotes textarea', t => { t.value = 'line\n'.repeat(14) + 'end'; t.dispatchEvent(new Event('input')); return { h: t.clientHeight, need: t.scrollHeight }; });
+  ok(fits.h >= fits.need - 2, 'edit box grows to fit a long note (' + fits.h + 'px for ' + fits.need + 'px)');
+  const short = await page.$eval('#jobNotes textarea', t => { t.value = 'x'; t.dispatchEvent(new Event('input')); return t.clientHeight; });
+  ok(short >= 150, 'edit box is never small (' + short + 'px)');
+  await page.evaluate(() => [...document.querySelectorAll('#jobNotes button')].find(b => b.textContent === 'Cancel').click());
+  await wait(100);
   // rename
   await type('#jobTitle', 'Monthly mailer');
   await page.keyboard.press('Enter'); await wait(100);
