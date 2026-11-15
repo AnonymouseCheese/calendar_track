@@ -1,8 +1,8 @@
 // Service worker: lets the app open offline.
 // Network first (so code updates arrive quickly), saved copy when offline.
 // It only ever caches the app's own files - never any notes.
-var CACHE = 'ct-v2';
-var SHELL = ['./', './index.html', './style.css?v=2', './app.js?v=2',
+var CACHE = 'ct-v5';
+var SHELL = ['./', './index.html', './style.css?v=5', './app.js?v=5',
   './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', function (e) {

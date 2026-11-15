@@ -75,7 +75,7 @@ for (const f of fs.readdirSync(SRC)) {
   });
   await page.click('#btnLock'); await unlock();
   await page.click('.tabs button[data-tab="calendar"]');
-  await page.click('#dayNote'); await page.type('#dayNote', ' edited'); await wait(900);
+  await page.click('#dayEdit'); await wait(100); await page.click('#dayNote'); await page.type('#dayNote', ' edited'); await wait(900);
   let d = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
   ok(d.futureThing && d.futureThing.keep && d.jobs[0].colour === 'red' && d.jobs[0].notes[0].pinned === true, 'fields from newer versions are not stripped on save');
 

@@ -59,7 +59,7 @@ The user's rule: **data must never be wiped when the app is updated.**
 
 1. Bump `?v=N` on **every** asset in `index.html`.
 2. In `sw.js`, bump `CACHE` (`ct-vN`) and the `?v=N` entries in `SHELL` to match.
-3. Run both test suites (below). Both must print `ALL PASSED`.
+3. Run all three test suites (below). Each must print `ALL PASSED`.
 4. Commit and push (DEPLOY.md, Case 1). Pages updates in ~1-2 min, and the
    phone picks it up on the next open while online.
 
@@ -71,8 +71,9 @@ npm install            # first time only (puppeteer-core; node_modules is gitign
 # terminal 1: serve the app
 cd .. && python -m http.server 8765 --bind 127.0.0.1
 # terminal 2:
-node test.js           # 67 feature checks, drives real Edge at iPhone size
-node test_upgrade.js   # 17 checks: ships a fake v2 and proves notes survive
+node test.js           # 103 feature checks, drives real Edge at iPhone size
+node test_drag.js      # 12 checks: drag-to-reorder Active jobs with a real mouse
+node test_upgrade.js   # 17 checks: ships a fake next version and proves notes survive
 ```
 
 Screenshots (`s*.png`) land in `tests/` and are gitignored.
@@ -102,6 +103,29 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
 - [x] Upgrade test now bumps whatever the current version is (no hardcoded v1/v2)
 - [x] Deployed 2026-11-15: public repo AnonymouseCheese/calendar_track, Pages built,
       registered in GitHub Desktop, live-site smoke test passed (https, service worker active)
+
+- [x] v5 (2026-11-15), all from user requests the same day:
+      - Old jobs grouped by month (newest first, tap a heading to fold it). Each
+        job has an optional `month` ('YYYY-MM') picked in the job screen. When
+        a job is marked done it's filed under the picked month, or the current one.
+      - The Today button greys out when tapping it would do nothing.
+      - Week view opens with no day open. Each day has Edit / Done, and tapping
+        the open day's heading closes it (state: `editing`).
+      - Tick-off items: each line of a day note is an item. Done = the line
+        starts with "✓ " (stored in the text itself, so it's PC/backup safe).
+        Week rows show "N left / All done". The month box shows the first item
+        still to do + "+N", and turns green when all are done. The month day
+        panel shows the same tick list, with Edit for the text box.
+      - Active jobs in the user's own order: `rank` (0 = top), drag by the ≡ grip
+        on the left or right edge (pointer events). New jobs go on top, the next
+        round keeps the same spot, and adding notes no longer reorders.
+- [x] Bug fixed: a garbled CSS escape showed "BE" before the month names
+      (the shell mangled backslashes). Write file content with the Write tool, not heredocs.
+
+### Designing next
+- [ ] Job timeline / milestones (quotation, jobsheet, printing, inserting,
+      ready, delivery date, delivered, billing). The user doesn't have a fixed
+      list. Design proposed 2026-11-15 and waiting on the user's answer.
 
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code

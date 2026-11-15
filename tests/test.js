@@ -63,46 +63,94 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok((await page.$eval('#dayNote', e => e.value)) === '', 'switching day shows empty note');
   await page.type('#dayNote', 'Pay rent');
   await click('#mNext'); // should flush
+  ok(!(await page.$eval('#btnToday', b => b.disabled)), 'Today active when viewing another month');
   stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
   ok(stored.days[otherKey] === 'Pay rent', 'note saved when changing month');
   await click('#mPrev');
   await click('#btnToday');
   await page.screenshot({ path: path.join(OUT, 's1_calendar.png') });
+  ok(await page.$eval('#btnToday', b => b.disabled), 'Today greyed out in month view when today is selected');
 
-  // 2b. week view
+  ok(await vis('#dayChecks') && !(await vis('#dayNote')), 'month view: day with items shows a tick list, not the text box');
+  ok((await page.$$('#dayChecks .check')).length === 2, 'month tick list has both items');
+
+  // 2b. week view (opens with no day open, every day a tick list)
   await click('.seg button[data-mode="week"]');
   ok(await vis('#week') && !(await vis('#grid')), 'week view replaces month grid');
   ok((await page.$$('#week .wk-row')).length === 7, 'week shows 7 days');
-  ok(await page.$eval('#week .wk-row.sel', r => r.classList.contains('today') && !!r.querySelector('#dayNote')), 'today selected with editor inside its row');
+  ok((await page.$$('#week .wk-row.sel')).length === 0 && !(await vis('#dayPanel')), 'week opens with no day open');
+  ok((await page.$$('#week .wk-row.today .check')).length === 2, 'today shows its items as tick boxes');
+  ok((await page.$eval('#week .wk-row.today .left', e => e.textContent)) === '2 left', 'today says 2 left');
+  ok(!(await page.$eval('#btnToday', b => b.disabled)), 'Today active while nothing is open');
+  // open today with its Edit button and add more lines
+  await page.evaluate(() => document.querySelector('#week .wk-row.today .wk-btn').click()); await wait(150);
+  ok(await page.$eval('#week .wk-row.sel', r => r.classList.contains('today') && !!r.querySelector('#dayNote')), 'Edit opens the text box inside the row');
+  ok(await page.$eval('#btnToday', b => b.disabled), 'Today greyed out in week view when today is open');
   await page.click('#dayNote');
-  await page.keyboard.press('End');
   await page.$eval('#dayNote', t => { t.setSelectionRange(t.value.length, t.value.length); });
   await page.type('#dayNote', '\nCall printer re: mailer\n\nTeam lunch\nPick up banner');
-  const todayNote = 'Dentist 3pm\nBring forms\nCall printer re: mailer\n\nTeam lunch\nPick up banner';
   const otherRow = await page.$$eval('#week .wk-row:not(.sel)', rs => rs[0].dataset.key);
-  await page.click('#week .wk-row[data-key="' + otherRow + '"]'); await wait(150);
+  await page.click('#week .wk-row[data-key="' + otherRow + '"] .wk-empty'); await wait(150);
   stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
-  ok(stored.days[todayKey] === todayNote, 'week edit saved when tapping another day');
-  const items = await page.$$eval('#week .wk-row.today li', ls => ls.map(l => l.textContent));
-  ok(items.length === 5 && items[2] === 'Call printer re: mailer', 'every line shown as its own item (blank lines skipped): ' + items.length);
-  ok(await page.$eval('#week .wk-row[data-key="' + otherRow + '"]', r => r.classList.contains('sel') && !!r.querySelector('#dayNote')), 'editor moved to tapped day');
+  ok(stored.days[todayKey] === 'Dentist 3pm\nBring forms\nCall printer re: mailer\n\nTeam lunch\nPick up banner', 'week edit saved when tapping another day');
+  const items = await page.$$eval('#week .wk-row.today .check .txt', ls => ls.map(l => l.textContent));
+  ok(items.length === 5 && items[2] === 'Call printer re: mailer', 'every line is its own item (blank lines skipped): ' + items.length);
+  ok(await page.$eval('#week .wk-row[data-key="' + otherRow + '"]', r => r.classList.contains('sel') && !!r.querySelector('#dayNote')), 'text box moved to the tapped day');
+  ok(!(await page.$eval('#btnToday', b => b.disabled)), 'Today active when another day is open');
+  await page.evaluate(() => document.querySelector('#week .wk-row.sel .wk-btn').click()); await wait(150);
+  ok((await page.$$('#week .wk-row.sel')).length === 0 && !(await vis('#dayPanel')), 'Done closes the day: nothing open');
   ok((await page.$$eval('#week .wk-empty', e => e.length)) >= 5, 'empty days say Nothing');
+
+  // ticking
+  const tick = async (sel, i) => { await page.evaluate((s, n) => document.querySelectorAll(s)[n].click(), sel, i); await wait(120); };
+  await tick('#week .wk-row.today .check', 0);
+  stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
+  ok(stored.days[todayKey].split('\n')[0] === '✓ Dentist 3pm', 'ticking saves a check mark on that line');
+  ok(await page.$eval('#week .wk-row.today .check', e => e.classList.contains('done')), 'ticked item shown as done');
+  ok((await page.$eval('#week .wk-row.today .left', e => e.textContent)) === '4 left', 'count drops to 4 left');
+  ok((await page.$$('#week .wk-row.sel')).length === 0, 'ticking does not open the day');
+  for (const i of [1, 2, 3, 4]) await tick('#week .wk-row.today .check', i);
+  ok((await page.$eval('#week .wk-row.today .left', e => e.textContent)) === 'All done', 'all ticked says All done');
+  await tick('#week .wk-row.today .check', 4);
+  ok((await page.$eval('#week .wk-row.today .left', e => e.textContent)) === '1 left', 'untick brings it back: 1 left');
+  stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
+  ok(stored.days[todayKey].split('\n')[5] === 'Pick up banner', 'untick removes the check mark');
   await page.screenshot({ path: path.join(OUT, 's1b_week.png'), fullPage: true });
+
   const wkLabel = await page.$eval('#mLabel', e => e.textContent);
   await click('#mNext');
   ok((await page.$eval('#mLabel', e => e.textContent)) !== wkLabel && (await page.$$('#week .wk-row')).length === 7, 'arrow moves a week');
   await click('#mPrev');
   ok((await page.$eval('#mLabel', e => e.textContent)) === wkLabel, 'back arrow returns');
   await click('#btnToday');
-  ok(await page.$eval('#week .wk-row.sel', r => r.classList.contains('today')), 'Today button works in week view');
+  ok(await page.$eval('#week .wk-row.sel', r => r.classList.contains('today')), 'Today button opens today');
+  await page.click('#week .wk-row.sel .wk-date'); await wait(150);
+  ok((await page.$$('#week .wk-row.sel')).length === 0, 'tapping the open day heading closes it');
+  const todayNote = (await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')))).days[todayKey];
   // lock / unlock keeps week view and the note
   await click('#btnLock');
   ok(await page.$('#dayPanel') !== null, 'day editor not destroyed by lock');
   await type('#unlockPw', 'ben'); await click('#unlockGo'); await wait(1000);
-  ok(await vis('#week') && (await page.$eval('#dayNote', t => t.value)) === todayNote, 'after unlock: still week view, note intact');
-  // month view again: editor back under the grid
+  ok(await vis('#week') && (await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')))).days[todayKey] === todayNote, 'after unlock: still week view, note intact');
+
+  // month view shows the same ticks
   await click('.seg button[data-mode="month"]');
-  ok(await vis('#grid') && await page.$eval('#dayPanel', p => !p.closest('#week')), 'month view restores editor below grid');
+  ok(await vis('#grid') && await page.$eval('#dayPanel', p => !p.closest('#week')), 'month view puts the day panel back under the grid');
+  await page.click('.cell.today'); await wait(150);
+  ok((await page.$eval('.cell.today .snip', e => e.textContent)) === 'Pick up banner' && !(await page.$('.cell.today .more')), 'month box shows the one item still to do');
+  ok((await page.$$('#dayChecks .check.done')).length === 4, 'month day list shows the same ticks');
+  await tick('#dayChecks .check', 4);
+  ok(await page.$eval('.cell.today', e => e.classList.contains('alldone') && e.querySelector('.snip').textContent === '✓ done'), 'ticking in month view turns the box green');
+  await tick('#dayChecks .check', 0);
+  await tick('#dayChecks .check', 1);
+  ok((await page.$eval('.cell.today .snip', e => e.textContent)) === 'Dentist 3pm' && (await page.$eval('.cell.today .more', e => e.textContent)) === '+1', 'box shows first item to do and +1');
+  await page.screenshot({ path: path.join(OUT, 's1d_month_ticks.png') });
+  await click('#dayEdit');
+  ok(await vis('#dayNote') && !(await vis('#dayChecks')) && await vis('#dayDone'), 'Edit shows the text box with Done');
+  ok((await page.$eval('#dayNote', t => t.value)).startsWith('Dentist 3pm\nBring forms\n✓ Call printer'), 'ticks visible as check marks in the text');
+  await click('#dayDone');
+  ok(await vis('#dayChecks') && !(await vis('#dayNote')), 'Done goes back to the tick list');
+  const todayNoteFinal = (await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')))).days[todayKey];
 
   // 3. jobs
   await click('.tabs button[data-tab="active"]');
@@ -166,6 +214,35 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok((await page.$eval('#prevLabel', e => e.textContent)).startsWith('Show notes from other rounds (1)'), 'old round sees other rounds');
   await click('#jobBack');
 
+  // 4b. old jobs grouped by month; month can be chosen
+  const heads = () => page.$$eval('#oldList .month-head .month-name', h => h.map(x => x.textContent));
+  const nowLabel = await page.evaluate(() => ['January','February','March','April','May','June','July','August','September','October','November','December'][new Date().getMonth()] + ' ' + new Date().getFullYear());
+  let hs = await heads();
+  ok(hs.length === 1 && hs[0] === nowLabel, 'old jobs grouped under the month they were done: ' + hs);
+  await page.evaluate(() => [...document.querySelectorAll('#oldList .card')].find(c => c.textContent.includes('Banner reprint')).click()); await wait(150);
+  ok(await vis('#jobMonth'), 'month picker on old job');
+  await page.$eval('#jobMonth', e => { e.value = '2026-09'; e.dispatchEvent(new Event('change')); }); await wait(100);
+  ok((await page.$eval('#monthHint', e => e.textContent)).includes('September 2026'), 'hint names the new month');
+  await click('#jobBack');
+  hs = await heads();
+  ok(JSON.stringify(hs) === JSON.stringify([nowLabel, 'September 2026']), 'moved job listed under September, newest month first: ' + hs);
+  await page.click('#oldList .month-head[data-month="2026-09"]'); await wait(100);
+  ok((await page.$$('#oldList .card')).length === 1, 'tapping a month heading folds it away');
+  await page.click('#oldList .month-head[data-month="2026-09"]'); await wait(100);
+  ok((await page.$$('#oldList .card')).length === 2, 'tapping again opens it');
+  await click('.tabs button[data-tab="active"]');
+  await page.click('#activeList .card'); await wait(150);
+  ok((await page.$eval('#jobMonth', e => e.value)) === '', 'active job has no month until you pick one');
+  await page.$eval('#jobMonth', e => { e.value = '2026-12'; e.dispatchEvent(new Event('change')); }); await wait(100);
+  ok((await page.$eval('#monthHint', e => e.textContent)).includes('December 2026'), 'active job hint names the chosen month');
+  await page.evaluate(() => [...document.querySelectorAll('#jobActions button')].find(b => b.textContent.startsWith('Mark as done')).click()); await wait(200);
+  await click('.tabs button[data-tab="old"]');
+  hs = await heads();
+  ok(JSON.stringify(hs) === JSON.stringify(['December 2026', nowLabel, 'September 2026']), 'finished job filed under the chosen month: ' + hs);
+  await page.screenshot({ path: path.join(OUT, 's3b_old_months.png'), fullPage: true });
+  stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
+  ok(stored.jobs.find(j => j.title === 'Banner reprint').month === '2026-09', 'chosen month saved in the data');
+
   // 5. lock / unlock
   await click('#btnLock');
   ok(await vis('#lock-unlock'), 'locked');
@@ -212,7 +289,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok((await page.$eval('#importErr', e => e.textContent)).includes('Wrong password'), 'wrong backup password rejected');
   await type('#importPw', 'filepw'); await click('#importOpen'); await wait(2000);
   stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
-  ok(stored.jobs.length === 3 && stored.days[todayKey] === todayNote, 'import restored everything');
+  ok(stored.jobs.length === 3 && stored.days[todayKey] === todayNoteFinal, 'import restored everything');
   ok(dialogs.some(d => d.startsWith('Replace everything')), 'import asked to confirm');
 
   // non-backup file
@@ -231,6 +308,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // XSS check: note with HTML is shown as text
   await click('.tabs button[data-tab="calendar"]');
+  await click('#dayEdit');
   await page.click('#dayNote', { clickCount: 3 });
   await page.$eval('#dayNote', t => { t.value = '<img src=x onerror=alert(1)>'; t.dispatchEvent(new Event('input')); });
   await wait(800);

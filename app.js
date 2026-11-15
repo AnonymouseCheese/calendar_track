@@ -44,6 +44,8 @@
     h = h % 12 || 12;
     return fmtDate(iso) + ', ' + h + ':' + pad(d.getMinutes()) + ' ' + ap;
   }
+  function monthKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+  function monthLabel(m) { return MONTHS[+m.slice(5) - 1] + ' ' + m.slice(0, 4); }
   function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
   function firstLine(s) { return String(s).trim().split('\n')[0]; }
   function str(v) { return typeof v === 'string' ? v : ''; }
@@ -89,6 +91,8 @@
           status: j.status === 'old' ? 'old' : 'active',
           created: str(j.created) || nowIso(),
           closed: j.status === 'old' ? (str(j.closed) || nowIso()) : null,
+          month: /^\d{4}-\d{2}$/.test(str(j.month)) ? j.month : undefined,
+          rank: typeof j.rank === 'number' && isFinite(j.rank) ? j.rank : undefined,
           notes: (Array.isArray(j.notes) ? j.notes : []).filter(function (n) {
             return n && typeof n.text === 'string';
           }).map(function (n) {
@@ -336,6 +340,7 @@
     $('app').hidden = false;
     var t = new Date();
     viewY = t.getFullYear(); viewM = t.getMonth(); selKey = dayKey(t);
+    editing = false;
     showTab(tab);
     updateBanner();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
@@ -394,10 +399,66 @@
 
   // Month view (overview grid) or Week view (every item of each day, full width).
   var calMode = localStorage.getItem('ct.calMode') === 'week' ? 'week' : 'month';
+  // Whether the selected day's text box is open. When closed, days show as tick lists.
+  var editing = false;
 
   // The day editor is one element that moves between the month view (below the
   // grid) and the selected row of the week view. Put it back before clearing lists.
   function parkPanel() { $('view-calendar').appendChild($('dayPanel')); }
+
+  // ---- items & ticks ----
+  // Each line of a day's note is one item. A done item starts with "✓ " - the tick
+  // lives in the text itself, so it survives edits, backups and moving to a PC.
+  var TICK = '✓';
+  var TICK_RE = /^(\s*)✓\s*/;
+  function dayItemsOf(k) {
+    var out = [];
+    (data.days[k] || '').split('\n').forEach(function (raw, i) {
+      var done = TICK_RE.test(raw);
+      var text = raw.replace(TICK_RE, '').trim();
+      if (text) out.push({ i: i, text: text, done: done });
+    });
+    return out;
+  }
+  function toggleItem(k, idx) {
+    commitDay();
+    var lines = (data.days[k] || '').split('\n');
+    var raw = lines[idx];
+    if (raw == null) return;
+    lines[idx] = TICK_RE.test(raw) ? raw.replace(TICK_RE, '$1') : raw.replace(/^(\s*)/, '$1' + TICK + ' ');
+    data.days[k] = lines.join('\n');
+    if (!save()) return;
+    renderCal();
+  }
+  function checklist(k) {
+    var items = dayItemsOf(k);
+    if (!items.length) return el('div', 'wk-empty', 'Nothing');
+    var ul = el('ul', 'checks');
+    items.forEach(function (it) {
+      var li = el('li', 'check' + (it.done ? ' done' : ''));
+      li.dataset.key = k;
+      li.dataset.idx = it.i;
+      li.setAttribute('role', 'checkbox');
+      li.setAttribute('aria-checked', it.done ? 'true' : 'false');
+      li.appendChild(el('span', 'box'));
+      li.appendChild(el('span', 'txt', it.text));
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+  function leftLabel(k) {
+    var items = dayItemsOf(k);
+    if (!items.length) return null;
+    var left = items.filter(function (it) { return !it.done; }).length;
+    return left ? el('span', 'left', left + ' left') : el('span', 'left all', 'All done');
+  }
+  // Ticking works anywhere a checklist is shown.
+  document.addEventListener('click', function (e) {
+    var li = e.target.closest && e.target.closest('.check');
+    if (!li || !unlocked) return;
+    e.stopPropagation();
+    toggleItem(li.dataset.key, +li.dataset.idx);
+  }, true);
 
   function renderCal() {
     parkPanel();
@@ -409,9 +470,13 @@
     $('grid').hidden = isWeek;
     $('week').hidden = !isWeek;
     $('dayHead').hidden = isWeek;
+    $('dayPanel').hidden = isWeek && !editing;
     if (isWeek) renderWeek();
     else renderMonth();
     renderDay();
+    var now = new Date();
+    $('btnToday').disabled = selKey === dayKey(now) &&
+      (isWeek ? editing : (viewY === now.getFullYear() && viewM === now.getMonth()));
   }
 
   function renderWeek() {
@@ -433,24 +498,19 @@
       var head = el('div', 'wk-head');
       head.appendChild(el('span', 'wk-date', DAYS[d.getDay()].slice(0, 3) + ' ' + d.getDate() + ' ' + MON[d.getMonth()]));
       if (k === todayKey) head.appendChild(el('span', 'pill active', 'Today'));
+      var left = leftLabel(k);
+      if (left) head.appendChild(left);
       row.appendChild(head);
-      if (k === selKey) {
+      if (k === selKey && editing) {
         row.classList.add('sel');
+        head.appendChild(btn('Done', 'small wk-btn', closeDay));
         row.appendChild($('dayPanel'));
       } else {
-        row.appendChild(dayItems(k));
+        head.appendChild(btn('Edit', 'small wk-btn', function () { selectDay(this.closest('.wk-row').dataset.key); }));
+        row.appendChild(checklist(k));
       }
       wk.appendChild(row);
     }
-  }
-
-  // Each line of a day's note is shown as its own item.
-  function dayItems(k) {
-    var lines = (data.days[k] || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-    if (!lines.length) return el('div', 'wk-empty', 'Nothing');
-    var ul = el('ul', 'wk-items');
-    lines.forEach(function (s) { ul.appendChild(el('li', null, s)); });
-    return ul;
   }
 
   function renderMonth() {
@@ -475,12 +535,19 @@
       grid.appendChild(b);
     }
   }
+  // A month box shows the first item still to do (+N for more), or turns green when all are done.
   function fillCell(b, k) {
-    var old = b.querySelector('.snip');
-    if (old) old.remove();
-    var note = data.days[k];
-    b.classList.toggle('has', !!note);
-    if (note) b.appendChild(el('span', 'snip', firstLine(note)));
+    Array.prototype.forEach.call(b.querySelectorAll('.snip, .more'), function (x) { x.remove(); });
+    var items = dayItemsOf(k);
+    var todo = items.filter(function (it) { return !it.done; });
+    b.classList.toggle('has', todo.length > 0);
+    b.classList.toggle('alldone', items.length > 0 && !todo.length);
+    if (todo.length) {
+      b.appendChild(el('span', 'snip', todo[0].text));
+      if (todo.length > 1) b.appendChild(el('span', 'more', '+' + (todo.length - 1)));
+    } else if (items.length) {
+      b.appendChild(el('span', 'snip', TICK + ' done'));
+    }
   }
   function renderDay() {
     var d = keyToDate(selKey);
@@ -488,6 +555,21 @@
     $('dayNote').value = data.days[selKey] || '';
     $('daySaved').textContent = '';
     dayEditKey = selKey;
+    panelMode();
+  }
+  // Month view: the selected day shows as a tick list, or as the text box while editing
+  // (or when the day is still empty, so you can just start typing).
+  function panelMode() {
+    var isWeek = calMode === 'week';
+    var has = dayItemsOf(selKey).length > 0;
+    var typing = isWeek || editing || !has;
+    $('dayNote').hidden = !typing;
+    $('dayTip').hidden = !typing;
+    $('dayChecks').hidden = typing;
+    $('dayChecks').textContent = '';
+    if (!typing) $('dayChecks').appendChild(checklist(selKey));
+    $('dayEdit').hidden = isWeek || typing;
+    $('dayDone').hidden = isWeek || !typing || !has;
   }
   function commitDay() {
     clearTimeout(dayTimer);
@@ -502,10 +584,12 @@
       $('daySaved').textContent = 'Saved';
       var cell = $('grid').querySelector('[data-key="' + dayEditKey + '"]');
       if (cell) fillCell(cell, dayEditKey);
+      if (calMode === 'month') $('dayDone').hidden = !dayItemsOf(dayEditKey).length;
       updateBanner();
     }
   }
   $('dayNote').addEventListener('input', function () {
+    editing = true;
     $('daySaved').textContent = '';
     clearTimeout(dayTimer);
     dayTimer = setTimeout(commitDay, 500);
@@ -515,6 +599,7 @@
   function selectDay(k) {
     commitDay();
     selKey = k;
+    editing = calMode === 'week'; // in Week view, tapping a day opens it for typing
     var d = keyToDate(k);
     viewY = d.getFullYear(); viewM = d.getMonth();
     renderCal();
@@ -541,9 +626,22 @@
   $('mNext').addEventListener('click', function () { moveBy(1); });
   $('btnToday').addEventListener('click', function () { selectDay(dayKey(new Date())); });
 
+  function closeDay() {
+    commitDay();
+    editing = false;
+    renderCal();
+  }
+  $('dayDone').addEventListener('click', closeDay);
+  $('dayEdit').addEventListener('click', function () {
+    editing = true;
+    panelMode();
+    $('dayNote').focus();
+  });
   $('week').addEventListener('click', function (e) {
     var row = e.target.closest('.wk-row');
-    if (row && !row.classList.contains('sel')) selectDay(row.dataset.key);
+    if (!row || e.target.closest('button')) return;
+    if (!row.classList.contains('sel')) selectDay(row.dataset.key);
+    else if (e.target.closest('.wk-head')) closeDay(); // tap the open day's heading to close it
   });
 
   Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
@@ -551,6 +649,7 @@
       if (calMode === b.dataset.mode) return;
       commitDay();
       calMode = b.dataset.mode;
+      editing = false;
       localStorage.setItem('ct.calMode', calMode);
       // Going to Week after browsing to another month: show that month's first week.
       var s = keyToDate(selKey);
@@ -618,14 +717,91 @@
     return b;
   }
 
+  // Active jobs are in the user's own order (job.rank, 0 = top), set by dragging.
+  // Jobs without a rank yet (new ones) go to the top.
+  function activeInOrder() {
+    var jobs = data.jobs.filter(function (j) { return j.status === 'active'; });
+    var unranked = jobs.filter(function (j) { return typeof j.rank !== 'number'; })
+      .sort(function (a, b) { return lastActivity(a) < lastActivity(b) ? 1 : -1; });
+    var ranked = jobs.filter(function (j) { return typeof j.rank === 'number'; })
+      .sort(function (a, b) { return a.rank - b.rank || (lastActivity(a) < lastActivity(b) ? 1 : -1); });
+    return unranked.concat(ranked);
+  }
+  function setRanks(jobs) {
+    var changed = false;
+    jobs.forEach(function (j, i) { if (j.rank !== i) { j.rank = i; changed = true; } });
+    return changed;
+  }
+
   function renderActive() {
     var list = $('activeList');
     list.textContent = '';
-    var jobs = data.jobs.filter(function (j) { return j.status === 'active'; })
-      .sort(function (a, b) { return lastActivity(a) < lastActivity(b) ? 1 : -1; });
-    jobs.forEach(function (j) { list.appendChild(jobCard(j)); });
+    var jobs = activeInOrder();
+    if (!readOnly && setRanks(jobs)) save();
+    jobs.forEach(function (j) {
+      var row = el('div', 'job-row');
+      row.dataset.id = j.id;
+      row.appendChild(el('span', 'grip', '≡'));
+      row.appendChild(jobCard(j));
+      row.appendChild(el('span', 'grip', '≡'));
+      list.appendChild(row);
+    });
     $('activeEmpty').hidden = jobs.length > 0;
+    $('dragTip').hidden = jobs.length < 2;
   }
+
+  // Drag a job up or down by the grip on its left or right edge.
+  var drag = null;
+  $('activeList').addEventListener('pointerdown', function (e) {
+    var grip = e.target.closest('.grip');
+    if (!grip || drag) return;
+    e.preventDefault();
+    var row = grip.closest('.job-row');
+    try { grip.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    drag = { row: row, grip: grip, id: e.pointerId, startY: e.pageY, origTop: row.offsetTop, lastY: e.pageY };
+    row.classList.add('dragging');
+  });
+  function dragMove(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    e.preventDefault();
+    // Scroll the page when dragging near the top or bottom of the screen.
+    if (e.clientY < 90) window.scrollBy(0, -10);
+    else if (e.clientY > window.innerHeight - 130) window.scrollBy(0, 10);
+    var y = e.clientY + window.scrollY;
+    drag.lastY = y;
+    var row = drag.row, list = $('activeList');
+    var prev = row.previousElementSibling, next = row.nextElementSibling;
+    if (next && y > mid(next)) list.insertBefore(next, row);
+    else if (prev && y < mid(prev)) list.insertBefore(row, prev);
+    row.style.transform = 'translateY(' + ((y - drag.startY) - (row.offsetTop - drag.origTop)) + 'px)';
+  }
+  function mid(elm) {
+    var r = elm.getBoundingClientRect();
+    return r.top + window.scrollY + r.height / 2;
+  }
+  function dragEnd(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var row = drag.row;
+    row.classList.remove('dragging');
+    row.style.transform = '';
+    drag = null;
+    var order = Array.prototype.map.call($('activeList').querySelectorAll('.job-row'), function (r) {
+      return jobById(r.dataset.id);
+    }).filter(Boolean);
+    if (setRanks(order)) save();
+    renderActive();
+  }
+  $('activeList').addEventListener('pointermove', dragMove);
+  $('activeList').addEventListener('pointerup', dragEnd);
+  $('activeList').addEventListener('pointercancel', dragEnd);
+
+  // The month a job is filed under in Old jobs: the one the user picked,
+  // otherwise the month it was finished.
+  function jobMonth(j) {
+    return j.month || monthKey(new Date(j.closed || j.created));
+  }
+
+  var collapsedMonths = {};
 
   function renderOld() {
     var list = $('oldList');
@@ -636,8 +812,32 @@
       if (!q) return true;
       if (j.title.toLowerCase().indexOf(q) >= 0) return true;
       return j.notes.some(function (n) { return n.text.toLowerCase().indexOf(q) >= 0; });
-    }).sort(function (a, b) { return a.closed < b.closed ? 1 : -1; });
-    jobs.forEach(function (j) { list.appendChild(jobCard(j)); });
+    }).sort(function (a, b) {
+      var ma = jobMonth(a), mb = jobMonth(b);
+      if (ma !== mb) return ma < mb ? 1 : -1;
+      return a.closed < b.closed ? 1 : -1;
+    });
+    var counts = {};
+    jobs.forEach(function (j) { var m = jobMonth(j); counts[m] = (counts[m] || 0) + 1; });
+    var cur = null;
+    jobs.forEach(function (j) {
+      var m = jobMonth(j);
+      var shut = !q && collapsedMonths[m];
+      if (m !== cur) {
+        cur = m;
+        var h = el('button', 'month-head' + (shut ? ' shut' : ''));
+        h.type = 'button';
+        h.dataset.month = m;
+        h.appendChild(el('span', 'month-name', monthLabel(m)));
+        h.appendChild(el('span', 'month-count', plural(counts[m], 'job')));
+        h.addEventListener('click', function () {
+          collapsedMonths[m] = !collapsedMonths[m];
+          renderOld();
+        });
+        list.appendChild(h);
+      }
+      if (!shut) list.appendChild(jobCard(j));
+    });
     var empty = $('oldEmpty');
     empty.hidden = jobs.length > 0;
     empty.textContent = all.length ? 'No old jobs match that search.' : 'No old jobs yet. When you mark a job as done, it moves here.';
@@ -705,6 +905,13 @@
     if (isOld) meta.push('done ' + fmtDate(j.closed));
     if (s.length > 1) meta.push('round ' + (s.indexOf(j) + 1) + ' of ' + s.length);
     $('jobMeta').textContent = meta.join(' · ');
+
+    $('jobMonth').value = isOld ? jobMonth(j) : (j.month || '');
+    $('monthHint').textContent = isOld
+      ? 'This job is listed under ' + monthLabel(jobMonth(j)) + ' in Old jobs.'
+      : j.month
+        ? 'When done, it will be listed under ' + monthLabel(j.month) + ' in Old jobs.'
+        : 'Optional. When done, it will be listed under the month you finish it, unless you pick a month here.';
 
     // Notes from the other rounds of a recurring job.
     var others = s.filter(function (x) { return x !== j && x.notes.length; }).reverse();
@@ -797,11 +1004,23 @@
   });
   $('prevToggle').addEventListener('change', renderJob);
 
+  $('jobMonth').addEventListener('change', function () {
+    var j = jobById(openId);
+    if (!j) return;
+    var v = $('jobMonth').value;
+    if (/^\d{4}-\d{2}$/.test(v)) j.month = v;
+    else delete j.month;
+    save();
+    renderJob();
+  });
+
   function finishJob(j, repeat) {
     commitTitle();
     j.status = 'old';
     j.closed = nowIso();
+    if (!j.month) j.month = monthKey(new Date());
     var next = repeat ? newJob(j.title, j.seriesId) : null;
+    if (next && typeof j.rank === 'number') next.rank = j.rank;
     save();
     if (next) { openJob(next.id); toast('Next round started. Old notes are under "Show previous notes".'); }
     else { closeJob(); toast('Moved to Old jobs'); }
@@ -816,6 +1035,7 @@
   function reopenJob(j) {
     j.status = 'active';
     j.closed = null;
+    delete j.rank;
     save();
     closeJob();
     toast('Moved back to Active jobs');

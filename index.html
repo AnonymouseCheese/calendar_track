@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
@@ -96,8 +96,12 @@
       <div id="dayPanel" class="day-panel">
         <div id="dayHead" class="day-head">
           <span id="dayLabel"></span>
+          <button id="dayEdit" class="small" type="button" hidden>Edit</button>
+          <button id="dayDone" class="small" type="button" hidden>Done</button>
         </div>
-        <textarea id="dayNote" placeholder="Write something for this day..."></textarea>
+        <div id="dayChecks" hidden></div>
+        <textarea id="dayNote" placeholder="Write something for this day. Put each item on its own line."></textarea>
+        <div id="dayTip" class="muted tiny">Each line is one item you can tick off.</div>
         <div id="daySaved" class="muted tiny"></div>
       </div>
     </section>
@@ -109,6 +113,7 @@
       </div>
       <div id="activeList" class="list"></div>
       <p id="activeEmpty" class="empty" hidden>No active jobs. Type a title above to add one.</p>
+      <p id="dragTip" class="muted tiny drag-tip">Drag a job by the ≡ on either side to change the order.</p>
     </section>
 
     <section id="view-old" class="view" hidden>
@@ -134,6 +139,12 @@
   <div class="sheet-body">
     <input id="jobTitle" class="title-input" aria-label="Job title" autocomplete="off">
     <div id="jobMeta" class="muted tiny"></div>
+
+    <label class="month-row">
+      <span>Month</span>
+      <input id="jobMonth" type="month">
+    </label>
+    <div id="monthHint" class="muted tiny month-hint"></div>
 
     <div id="prevWrap" class="prev" hidden>
       <label class="toggle"><input type="checkbox" id="prevToggle"> <span id="prevLabel"></span></label>
@@ -197,6 +208,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=2"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
