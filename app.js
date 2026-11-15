@@ -553,7 +553,7 @@
   }
   function allItemsOf(k) {
     return dayItemsOf(k).concat(stageItemsOn(k).map(function (s) {
-      return { done: s.st.done, text: s.job.title + ': ' + s.st.name };
+      return { done: s.st.done, text: s.job.title + ': ' + stageLabel(s.job, s.st) };
     }));
   }
   function toggleStageFromCal(jobId, stId) {
@@ -588,8 +588,8 @@
       li.dataset.kind = 'stage';
       li.dataset.job = s.job.id;
       li.dataset.stage = s.st.id;
-      li.appendChild(tickBox(s.st.done, s.job.title + ': ' + s.st.name));
-      li.appendChild(el('span', 'txt', s.job.title + ': ' + s.st.name));
+      li.appendChild(tickBox(s.st.done, s.job.title + ': ' + stageLabel(s.job, s.st)));
+      li.appendChild(el('span', 'txt', s.job.title + ': ' + stageLabel(s.job, s.st)));
       ul.appendChild(li);
     });
     items.forEach(function (it) {
@@ -1080,12 +1080,21 @@
   }
   function stageLate(st) { return !st.done && st.due && st.due < dayKey(new Date()); }
 
+  // A stage used more than once in a job is labelled "Printing (2nd time)" etc.
+  function nth(n) {
+    var t = n % 100;
+    return n + (t >= 11 && t <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+  }
+  function stageLabel(j, st) {
+    var n = st.name.toLowerCase(), k = 0;
+    var list = j.stages || [];
+    for (var i = 0; i < list.length && list[i] !== st; i++) if (list[i].name.toLowerCase() === n) k++;
+    return k ? st.name + ' (' + nth(k + 1) + ' time)' : st.name;
+  }
   function addStage(j, name) {
     name = name.trim();
     if (!name) return;
     j.stages = j.stages || [];
-    var n = name.toLowerCase();
-    if (j.stages.some(function (s) { return s.name.toLowerCase() === n; })) return;
     var li = libIndex(name, j.kind);
     if (li < 0) {
       setLib(j.kind, stageLib(j.kind).concat([name])); // remember new names for next time
@@ -1113,8 +1122,8 @@
     var done = st.filter(function (s) { return s.done; }).length;
     var late = st.filter(stageLate)[0];
     var next = st.filter(function (s) { return !s.done; })[0];
-    var text = late ? 'Late: ' + late.name + ' (due ' + fmtDay(late.due) + ')'
-      : next ? 'Next: ' + next.name + (next.due ? ' (due ' + fmtDay(next.due) + ')' : '')
+    var text = late ? 'Late: ' + stageLabel(j, late) + ' (due ' + fmtDay(late.due) + ')'
+      : next ? 'Next: ' + stageLabel(j, next) + (next.due ? ' (due ' + fmtDay(next.due) + ')' : '')
         : 'All stages done';
     return { text: text + ' · ' + done + '/' + st.length, pct: Math.round(100 * done / st.length), late: !!late, all: !next };
   }
@@ -1137,7 +1146,7 @@
       });
       dot.setAttribute('aria-label', (st.done ? 'Untick ' : 'Tick ') + st.name);
       var main = el('div', 'st-main');
-      main.appendChild(el('div', 'st-name', st.name));
+      main.appendChild(el('div', 'st-name', stageLabel(j, st)));
       var sub = st.done ? (st.doneAt ? 'Done ' + fmtDay(st.doneAt) : 'Done')
         : st.due ? 'Due ' + fmtDay(st.due) : '';
       if (sub) main.appendChild(el('div', 'st-sub' + (stageLate(st) ? ' late' : ''), sub));
@@ -1165,8 +1174,8 @@
     var have = stages.map(function (s) { return s.name.toLowerCase(); });
     var chips = el('div', 'chips');
     stageLib(j.kind).forEach(function (n) {
-      if (have.indexOf(n.toLowerCase()) >= 0) return;
-      chips.appendChild(btn('+ ' + n, 'chip', function () {
+      var used = have.indexOf(n.toLowerCase()) >= 0;
+      chips.appendChild(btn('+ ' + n + (used ? ' again' : ''), 'chip' + (used ? ' used' : ''), function () {
         stageUi.addOpen = true; // keep the chips open to add several
         addStage(j, n);
         save();
@@ -1588,7 +1597,7 @@
     var main = el('div', 'ov-main');
     main.appendChild(el('div', 'ov-title', j.title));
     var lateSt = st.filter(stageLate)[0];
-    var sub = lateSt ? 'Late: ' + lateSt.name + ' (due ' + fmtDay(lateSt.due) + ')'
+    var sub = lateSt ? 'Late: ' + stageLabel(j, lateSt) + ' (due ' + fmtDay(lateSt.due) + ')'
       : cur && cur.due ? 'Due ' + fmtDay(cur.due) : '';
     if (sub) main.appendChild(el('div', 'ov-sub' + (lateSt ? ' late' : ''), sub));
     row.appendChild(main);

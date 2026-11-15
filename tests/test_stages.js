@@ -39,7 +39,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await clickText('#stageAdd .chip', '+ Printing');
   ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing', 'Quotation']), 'latest stage at the top, first at the bottom: ' + await stageNames());
   ok(JSON.stringify((await stored()).jobs[0].stages.map(x => x.name)) === JSON.stringify(['Quotation', 'Printing', 'Delivery date', 'Billing']), 'stored in sensible order');
-  ok(!(await page.$$eval('#stageAdd .chip', c => c.map(x => x.textContent))).includes('+ Printing'), 'used stages leave the chip list');
+  const chips2 = await page.$$eval('#stageAdd .chip', c => c.map(x => x.textContent));
+  ok(chips2.includes('+ Printing again') && !chips2.includes('+ Printing'), 'used stages stay as "+ Printing again"');
   // custom stage
   await clickText('#stageAdd .chip', '+ New stage');
   await page.type('#stageNewName', 'Proof approved'); await page.keyboard.press('Enter'); await wait(150);
@@ -90,6 +91,22 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok((await stageNames()).indexOf('Proof approved') === iProof, 'Move up moves it back');
   await clickText('#stages .st-edit button', 'Remove');
   ok(!(await stageNames()).includes('Proof approved'), 'stage removed');
+  // the same stage twice (e.g. a reprint)
+  await clickText('#stageAdd button', '+ Add a stage');
+  await clickText('#stageAdd .chip', '+ Printing again');
+  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing (2nd time)', 'Printing', 'Quotation']), 'same stage added again, right after the first: ' + await stageNames());
+  ok((await stored()).jobs[0].stages.filter(s => s.name === 'Printing').length === 2, 'both saved with the same name');
+  await clickText('#stageAdd .chip', '+ New stage');
+  await page.type('#stageNewName', 'printing'); await page.keyboard.press('Enter'); await wait(150);
+  ok((await stageNames()).includes('printing (3rd time)'), 'typing an existing name also works (3rd time)');
+  // remove the extras again so the rest of the test is unchanged
+  for (const nm of ['printing (3rd time)', 'Printing (2nd time)']) {
+    const k = (await stageNames()).indexOf(nm);
+    await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), k); await wait(120);
+    await clickText('#stages .st-edit button', 'Remove');
+  }
+  await clickText('#stageAdd button', 'Done adding');
+  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing', 'Quotation']), 'extras removed');
   await page.screenshot({ path: path.join(__dirname, 's6_stages.png'), fullPage: true });
   await page.click('#jobBack'); await wait(150);
 

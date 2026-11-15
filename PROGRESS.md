@@ -178,6 +178,11 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
       It shows a late count, due/late per row, and progress dots. Tapping a row opens the
       job on top (`#sheet-job` z-index 25), and coming back refreshes the overview.
 
+- [x] v13: a job can have the same stage more than once (e.g. a second Printing after a
+      reprint). The user tried and it silently did nothing. Chips stay visible; used ones read
+      "+ X again". A repeat goes right after the earlier one and is shown as "X (2nd time)"
+      (`stageLabel()`) in the timeline, calendar, card and overview.
+
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code
 - [ ] User does a first backup and test-restores it once

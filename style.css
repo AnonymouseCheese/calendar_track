@@ -417,3 +417,5 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .dots span { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); }
 .dots span.done { background: var(--done); border-color: var(--done); }
 .dots span.cur { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.chip.used { color: var(--muted); border-style: dashed; }
