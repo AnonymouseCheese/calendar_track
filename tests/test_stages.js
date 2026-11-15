@@ -152,7 +152,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // survives reload
   await page.reload({ waitUntil: 'networkidle0' });
-  await page.type('#unlockPw', 'ben'); await page.click('#unlockGo'); await wait(1200);
+  await wait(1000);
+  ok(await vis('#app'), 'reopening within 4 hours skips the password');
   d = await stored();
   ok(d.jobs.some(j => j.stages && j.stages.length === 4), 'stages kept after reopening');
 

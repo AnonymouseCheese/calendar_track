@@ -98,7 +98,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // bin survives reload
   await page.reload({ waitUntil: 'networkidle0' });
-  await page.type('#unlockPw', 'ben'); await page.click('#unlockGo'); await wait(1200);
+  await wait(1000);
+  ok(await vis('#app'), 'reopening within 4 hours skips the password');
   d = await stored();
   ok(d.bin.length === 1 && d.bin[0].job.title === 'Other job', 'bin kept after reopening');
   await page.click('#btnSettings'); await wait(150);

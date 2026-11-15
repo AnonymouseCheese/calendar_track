@@ -331,7 +331,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(swOk, 'service worker controls the page');
   await page.setOfflineMode(true);
   await page.reload({ waitUntil: 'domcontentloaded' }); await wait(5000);
-  ok(await vis('#lock-unlock'), 'app opens offline');
+  ok(await vis('#app'), 'app opens offline (still unlocked)');
   await page.setOfflineMode(false);
 
   ok(offsite.length === 0, 'no requests to other sites ' + offsite.join(','));

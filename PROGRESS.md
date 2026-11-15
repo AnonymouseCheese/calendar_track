@@ -59,7 +59,7 @@ The user's rule: **data must never be wiped when the app is updated.**
 
 1. Bump `?v=N` on **every** asset in `index.html`.
 2. In `sw.js`, bump `CACHE` (`ct-vN`) and the `?v=N` entries in `SHELL` to match.
-3. Run all six test suites (below). Each must print `ALL PASSED`.
+3. Run all seven test suites (below). Each must print `ALL PASSED`.
 4. Commit and push (DEPLOY.md, Case 1). Pages updates in ~1-2 min, and the
    phone picks it up on the next open while online.
 
@@ -76,6 +76,7 @@ node test_drag.js      # 12 checks: drag-to-reorder Active jobs with a real mous
 node test_stages.js    # 30 checks: job stages / timeline / calendar link / settings list
 node test_bin.js       # 19 checks: recycle bin (undo, restore, delete forever, empty)
 node test_misc.js      # 28 checks: Jobs | Misc switch, separate misc stage list
+node test_lock.js      # 21 checks: password stays valid 4h by default, settings options
 node test_upgrade.js   # 17 checks: ships a fake next version and proves notes survive
 ```
 
@@ -161,6 +162,12 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
 
 - [x] v10: misc items say "item" / "Old misc" / "Active misc" in their buttons, hints and
       messages (`wordsFor(j)`). Jobs keep "job" / "Old jobs" / "Active jobs".
+
+- [x] v11: the password stays valid for a while once typed, even if the app is closed.
+      Default is 4 HOURS (the user asked for this). Settings > Password > "Ask for the password":
+      every time / after 1 hour / after 4 hours / once a day (until midnight). Stored in
+      `ct.lockMode`, and the end time in `ct.unlockUntil`. The Lock button clears it. Changing
+      the setting counts from now. A 60s timer locks the app if it's left open past the end.
 
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code

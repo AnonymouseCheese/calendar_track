@@ -45,6 +45,7 @@ for (const f of fs.readdirSync(SRC)) {
   const lockBefore = await page.evaluate(() => localStorage.getItem('ct.lock'));
   ok(before.includes('Version 1 note') && before.includes('note from v1'), 'v1 data saved');
 
+  await page.click('#btnLock'); await wait(200); // so the new version has to ask
   // --- ship "version 2" ---
   // Bump whatever version is current (N) to N+1, exactly as a real release does.
   const cur = +fs.readFileSync(path.join(COPY, 'sw.js'), 'utf8').match(/'ct-v(\d+)'/)[1], nxt = cur + 1;

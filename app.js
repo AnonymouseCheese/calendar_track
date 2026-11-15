@@ -348,13 +348,13 @@
       showLock('code');
     });
   }));
-  $('codeDone').addEventListener('click', function () { $('codeShow').textContent = ''; unlock(); });
+  $('codeDone').addEventListener('click', function () { $('codeShow').textContent = ''; startSession(); unlock(); });
 
   $('unlockGo').addEventListener('click', guard(function () {
     var pw = $('unlockPw').value;
     if (!pw) return;
     return checkPassword(pw).then(function (ok) {
-      if (ok) unlock();
+      if (ok) { startSession(); unlock(); }
       else { $('unlockErr').textContent = 'Wrong password.'; $('unlockPw').value = ''; }
     });
   }));
@@ -366,7 +366,7 @@
       if (!ok) { $('forgotErr').textContent = "That recovery code isn't right."; return; }
       var p = pwProblem(a, b);
       if (p) { $('forgotErr').textContent = p; return; }
-      return setNewPassword(a).then(function () { unlock(); toast('New password set'); });
+      return setNewPassword(a).then(function () { startSession(); unlock(); toast('New password set'); });
     });
   }));
 
@@ -393,19 +393,65 @@
 
   function lockNow() {
     flushAll();
+    endSession();
     showLock(getLock() ? 'unlock' : 'setup');
   }
   $('btnLock').addEventListener('click', lockNow);
+
+  // How long the password lasts once typed (Settings > Password).
+  //   'always' = ask every time (locks after 2 min in the background)
+  //   '1h' / '4h' = stay unlocked that long, even if the app is closed (4h is the default)
+  //   'day' = stay unlocked until midnight
+  var KEY_LOCKMODE = 'ct.lockMode';
+  var KEY_UNTIL = 'ct.unlockUntil';
+  function lockMode() {
+    var m = localStorage.getItem(KEY_LOCKMODE);
+    return m === 'always' || m === '1h' || m === 'day' ? m : '4h';
+  }
+  function sessionEnd(mode) {
+    var now = new Date();
+    if (mode === '1h') return now.getTime() + 3600e3;
+    if (mode === '4h') return now.getTime() + 4 * 3600e3;
+    if (mode === 'day') return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    return 0;
+  }
+  function startSession() {
+    var until = sessionEnd(lockMode());
+    if (until) localStorage.setItem(KEY_UNTIL, String(until));
+    else localStorage.removeItem(KEY_UNTIL);
+  }
+  function endSession() { localStorage.removeItem(KEY_UNTIL); }
+  function sessionValid() {
+    return lockMode() !== 'always' && Date.now() < (+localStorage.getItem(KEY_UNTIL) || 0);
+  }
 
   var hiddenAt = 0;
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       flushAll();
       hiddenAt = Date.now();
-    } else if (unlocked && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) {
+    } else if (unlocked && !sessionValid() &&
+      (lockMode() !== 'always' || (hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS))) {
       lockNow();
     }
   });
+  // If the app is left open past the end of the unlocked period, lock it.
+  setInterval(function () {
+    if (unlocked && lockMode() !== 'always' && !sessionValid()) lockNow();
+  }, 60000);
+
+  $('lockMode').addEventListener('change', function () {
+    localStorage.setItem(KEY_LOCKMODE, $('lockMode').value);
+    if (unlocked) startSession(); // counts from now
+    renderLockInfo();
+  });
+  function renderLockInfo() {
+    $('lockMode').value = lockMode();
+    var until = +localStorage.getItem(KEY_UNTIL) || 0;
+    $('lockInfo').textContent = lockMode() === 'always' || !until ? ''
+      : 'Unlocked until ' + (dayKey(new Date(until - 1)) === dayKey(new Date()) && lockMode() === 'day'
+        ? 'midnight tonight.' : fmtDateTime(new Date(until).toISOString()) + '.');
+  }
   window.addEventListener('pagehide', flushAll);
 
   function flushAll() {
@@ -1589,6 +1635,7 @@
 
   function renderSettings() {
     renderLib();
+    renderLockInfo();
     $('binOpen2').textContent = 'Open the recycle bin (' + (data.bin || []).length + ')';
     var lb = localStorage.getItem(KEY_BACKUP), d = daysSinceBackup();
     $('backupInfo').textContent = lb
@@ -1791,7 +1838,8 @@
     return;
   }
 
-  showLock(getLock() ? 'unlock' : 'setup');
+  if (getLock() && sessionValid()) unlock();
+  else showLock(getLock() ? 'unlock' : 'setup');
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('sw.js').catch(function () {});

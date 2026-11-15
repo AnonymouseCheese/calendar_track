@@ -58,7 +58,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // order survives a reload + unlock
   await page.reload({ waitUntil: 'networkidle0' });
-  await page.type('#unlockPw', 'ben'); await page.click('#unlockGo'); await wait(1200);
+  await wait(1000);
+  ok(await vis('#app'), 'reopening within 4 hours skips the password');
   await page.click('.tabs button[data-tab="active"]'); await wait(100);
   ok(JSON.stringify(await titles()) === JSON.stringify(['Job A', 'Job C', 'Job B', 'Job D']), 'order kept after reopening the app');
 

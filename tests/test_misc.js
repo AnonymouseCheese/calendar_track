@@ -107,7 +107,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // reload: kind switch remembered
   await page.reload({ waitUntil: 'networkidle0' });
-  await page.type('#unlockPw', 'ben'); await page.click('#unlockGo'); await wait(1200);
+  await wait(1000);
+  ok(await vis('#app'), 'reopening within 4 hours skips the password');
   await page.click('.tabs button[data-tab="active"]'); await wait(100);
   ok(await page.$eval('#view-active .kind-seg button.on', b => b.textContent) === 'Misc', 'Misc remembered after reopening');
 

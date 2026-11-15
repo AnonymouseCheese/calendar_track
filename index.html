@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -207,6 +207,16 @@
     <button id="snapGo" class="wide" type="button" hidden>Go back to the automatic copy</button>
 
     <h3>Password</h3>
+    <label class="set-row">
+      <span>Ask for the password</span>
+      <select id="lockMode">
+        <option value="always">Every time I open the app</option>
+        <option value="1h">After 1 hour</option>
+        <option value="4h">After 4 hours</option>
+        <option value="day">Once a day (until midnight)</option>
+      </select>
+    </label>
+    <p id="lockInfo" class="muted tiny"></p>
     <button id="pwChange" class="wide" type="button">Change password</button>
     <div id="pwForm" hidden>
       <input id="pwOld" type="password" placeholder="Current password" autocomplete="current-password">
@@ -257,6 +267,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
