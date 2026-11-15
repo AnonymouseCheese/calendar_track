@@ -207,6 +207,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.evaluate(() => [...document.querySelectorAll('#jobActions button')].find(b => b.textContent.startsWith('Mark as done')).click());
   await wait(200);
   ok(!(await vis('#sheet-job')), 'mark done closes detail');
+  ok((await page.$eval('#toast', e => e.textContent)) === 'Moved to Old jobs', 'jobs still say Old jobs');
 
   // 4. old jobs
   await click('.tabs button[data-tab="old"]');

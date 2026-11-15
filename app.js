@@ -121,7 +121,7 @@
     var id = str(j.id) || uid();
     return Object.assign({}, j, {
       id: id,
-      title: str(j.title) || 'Untitled job',
+      title: str(j.title) || (j.kind === 'misc' ? 'Untitled item' : 'Untitled job'),
       kind: j.kind === 'misc' ? 'misc' : undefined,
       seriesId: str(j.seriesId) || id,
       status: j.status === 'old' ? 'old' : 'active',
@@ -1111,7 +1111,7 @@
       add.appendChild(btn('+ Add a stage', 'link', function () { stageUi.addOpen = true; renderJob(); }));
       return;
     }
-    if (!stages.length) add.appendChild(el('div', 'muted tiny', 'Tap the stages this job needs. You can add or remove them any time.'));
+    if (!stages.length) add.appendChild(el('div', 'muted tiny', 'Tap the stages this ' + wordsFor(j).thing + ' needs. You can add or remove them any time.'));
     var have = stages.map(function (s) { return s.name.toLowerCase(); });
     var chips = el('div', 'chips');
     stageLib(j.kind).forEach(function (n) {
@@ -1326,9 +1326,9 @@
 
     $('jobMonth').value = isOld ? jobMonth(j) : (j.month || '');
     $('monthHint').textContent = isOld
-      ? 'This job is listed under ' + monthLabel(jobMonth(j)) + ' in Old jobs.'
+      ? 'This ' + wordsFor(j).thing + ' is listed under ' + monthLabel(jobMonth(j)) + ' in ' + wordsFor(j).old + '.'
       : j.month
-        ? 'When done, it will be listed under ' + monthLabel(j.month) + ' in Old jobs.'
+        ? 'When done, it will be listed under ' + monthLabel(j.month) + ' in ' + wordsFor(j).old + '.'
         : 'Optional. When done, it will be listed under the month you finish it, unless you pick a month here.';
     renderStages(j);
 
@@ -1370,13 +1370,13 @@
     var act = $('jobActions');
     act.textContent = '';
     if (!isOld) {
-      act.appendChild(btn('Mark as done (move to Old jobs)', '', function () { finishJob(j, false); }));
+      act.appendChild(btn('Mark as done (move to ' + wordsFor(j).old + ')', '', function () { finishJob(j, false); }));
       act.appendChild(btn('Done, and start the next round', '', function () { finishJob(j, true); }));
     } else {
-      act.appendChild(btn('Start a new round of this job', '', function () { startRound(j); }));
-      act.appendChild(btn('Move back to Active jobs', '', function () { reopenJob(j); }));
+      act.appendChild(btn('Start a new round of this ' + wordsFor(j).thing, '', function () { startRound(j); }));
+      act.appendChild(btn('Move back to ' + wordsFor(j).active, '', function () { reopenJob(j); }));
     }
-    act.appendChild(btn('Delete this job', 'danger', function () { deleteJob(j); }));
+    act.appendChild(btn('Delete this ' + wordsFor(j).thing, 'danger', function () { deleteJob(j); }));
   }
 
   function stageNotesOf(j) {
@@ -1452,7 +1452,7 @@
     if (next && typeof j.rank === 'number') next.rank = j.rank;
     save();
     if (next) { openJob(next.id); toast('Next round started. Old notes are under "Show previous notes".'); }
-    else { closeJob(); toast('Moved to Old jobs'); }
+    else { closeJob(); toast('Moved to ' + wordsFor(j).old); }
   }
   function startRound(j) {
     var next = newJob(j.title, j.seriesId, j.kind);
@@ -1460,7 +1460,7 @@
     save();
     showTab('active');
     openJob(next.id);
-    toast('New round started in Active jobs');
+    toast('New round started in ' + wordsFor(j).active);
   }
   function reopenJob(j) {
     j.status = 'active';
@@ -1468,7 +1468,7 @@
     delete j.rank;
     save();
     closeJob();
-    toast('Moved back to Active jobs');
+    toast('Moved back to ' + wordsFor(j).active);
   }
   // ---------- recycle bin ----------
   // Deleted jobs go to data.bin = [{ job, deletedAt }] whole (notes, stages and
@@ -1479,6 +1479,11 @@
     if (!save()) return;
     closeJob();
     toast('Moved to the recycle bin', function () { restoreJob(j.id); });
+  }
+  function wordsFor(j) {
+    return j.kind === 'misc'
+      ? { thing: 'item', untitled: 'Untitled item', old: 'Old misc', active: 'Active misc' }
+      : { thing: 'job', untitled: 'Untitled job', old: 'Old jobs', active: 'Active jobs' };
   }
   function placeName(j) {
     return (j.status === 'old' ? 'Old ' : 'Active ') + (j.kind === 'misc' ? 'misc' : 'jobs');

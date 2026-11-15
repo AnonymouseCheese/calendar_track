@@ -159,6 +159,9 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
       typed names are remembered), and Settings shows both lists. The calendar Month|Week
       switch is now `#calSeg`. The bottom tabs are renamed "Active" / "Old".
 
+- [x] v10: misc items say "item" / "Old misc" / "Active misc" in their buttons, hints and
+      messages (`wordsFor(j)`). Jobs keep "job" / "Old jobs" / "Active jobs".
+
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code
 - [ ] User does a first backup and test-restores it once

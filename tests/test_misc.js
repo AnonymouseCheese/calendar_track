@@ -75,7 +75,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(await page.$eval('#view-active .kind-seg button.on', b => b.textContent) === 'Jobs', 'switch remembered (Jobs)');
   await kind('Misc');
   await page.click('#activeList .card'); await wait(150);
+  ok(JSON.stringify(await page.$$eval('#jobActions button', b => b.map(x => x.textContent))) === JSON.stringify(['Mark as done (move to Old misc)', 'Done, and start the next round', 'Delete this item']), 'misc item buttons say item / misc');
   await clickText('#jobActions button', 'Mark as done');
+  ok((await page.$eval('#toast', e => e.textContent)) === 'Moved to Old misc', 'message says Old misc');
   await page.click('.tabs button[data-tab="old"]'); await wait(100);
   ok(await page.$eval('#view-old .kind-seg button.on', b => b.textContent) === 'Misc', 'Old tab follows the same switch');
   ok((await page.$eval('#viewTitle', e => e.textContent)) === 'Old misc', 'title says Old misc');
@@ -86,7 +88,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // bin wording
   await page.click('#oldList .card'); await wait(150);
-  await clickText('#jobActions button', 'Delete this job');
+  ok(JSON.stringify(await page.$$eval('#jobActions button', b => b.map(x => x.textContent))) === JSON.stringify(['Start a new round of this item', 'Move back to Active misc', 'Delete this item']), 'old misc item buttons say item / misc');
+  await clickText('#jobActions button', 'Delete this item');
   await page.click('#binOpen'); await wait(150);
   ok((await page.$eval('#binList .card-meta', e => e.textContent)).includes('Was in Old misc'), 'bin says Old misc');
   await clickText('#binList button', 'Restore');
