@@ -65,6 +65,18 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await setDue('Delivery date', tomorrow);
   await setDue('Printing', yesterday);
   ok(await page.$eval('#stages .stage.next .st-sub', e => e.classList.contains('late') && e.textContent.startsWith('Due ')), 'overdue stage shown in red');
+  // due today still shows the date, never "Due today"
+  await setDue('Billing', today);
+  const billSub = await page.evaluate(() => [...document.querySelectorAll('#stages .stage')].find(r => r.textContent.includes('Billing')).querySelector('.st-sub').textContent);
+  ok(/^Due \d{1,2} [A-Z][a-z]{2}/.test(billSub) && !billSub.includes('today'), 'due today shows the date: ' + billSub);
+  // a note on a stage
+  const iBill = (await stageNames()).indexOf('Billing');
+  await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), iBill); await wait(120);
+  await page.type('#stages .st-edit textarea', 'Bill to finance dept\nPO 4471');
+  await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), iBill); await wait(120);
+  const billNote = await page.evaluate(() => [...document.querySelectorAll('#stages .stage')].find(r => r.textContent.includes('Billing')).querySelector('.st-note'));
+  ok(billNote !== null, 'stage note shows under the stage');
+  ok((await stored()).jobs[0].stages.find(s => s.name === 'Billing').note === 'Bill to finance dept\nPO 4471', 'stage note saved');
   // move a stage, remove a stage
   const iProof = (await stageNames()).indexOf('Proof approved');
   await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), iProof); await wait(120);
@@ -89,7 +101,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   if (!onCal.length) { await page.click('#mNext'); await wait(120); onCal = await page.$$eval(rowSel + ' .check.jobstage .txt', e => e.map(x => x.textContent)); }
   ok(onCal.length === 1 && onCal[0] === 'Mailer client A: Delivery date', 'stage due date appears on the calendar');
   ok((await page.$eval(rowSel + ' .left', e => e.textContent)) === '1 left', 'calendar counts it as outstanding');
-  await page.evaluate(s => document.querySelector(s + ' .check.jobstage').click(), rowSel); await wait(150);
+  await page.evaluate(s => document.querySelector(s + ' .check.jobstage .txt').click(), rowSel); await wait(150);
+  ok(!(await stored()).jobs[0].stages.find(s => s.name === 'Delivery date').done, 'tapping the stage text on the calendar does not tick it');
+  if ((await page.$$('#week .wk-row.sel')).length) { await page.evaluate(() => document.querySelector('#week .wk-row.sel .wk-btn').click()); await wait(150); }
+  await page.evaluate(s => document.querySelector(s + ' .check.jobstage .box').click(), rowSel); await wait(150);
+  await page.click('#toast .toast-undo'); await wait(150);
+  ok(!(await stored()).jobs[0].stages.find(s => s.name === 'Delivery date').done, 'Undo reverses a calendar tick');
+  await page.evaluate(s => document.querySelector(s + ' .check.jobstage .box').click(), rowSel); await wait(150);
   d = await stored();
   ok(d.jobs[0].stages.find(s => s.name === 'Delivery date').done === true, 'ticking on the calendar ticks the job stage');
   await page.click('#btnToday'); await wait(100);
@@ -106,6 +124,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await clickText('#jobActions button', 'Done, and start the next round');
   ok(JSON.stringify(await stageNames()) === JSON.stringify(['Quotation', 'Printing', 'Delivery date', 'Billing']), 'next round has the same stages');
   ok((await page.$$('#stages .stage.done')).length === 0 && (await page.$$('#stages .st-sub')).length === 0, 'unticked, no dates');
+  ok((await page.$$('#stages .st-note')).length === 0, 'stage notes not copied into the next round');
+  ok((await page.$eval('#prevLabel', e => e.textContent)) === 'Show previous notes (1)', 'previous notes count includes the stage note');
+  await page.click('#prevToggle'); await wait(120);
+  ok((await page.$eval('#prevNotes', e => e.textContent)).includes('Stage: Billing') && (await page.$eval('#prevNotes', e => e.textContent)).includes('PO 4471'), 'previous round stage note shown');
+  await page.click('#prevToggle'); await wait(120);
   await page.click('#jobBack'); await wait(100);
 
   // custom stage became a chip for other jobs; settings list edits it

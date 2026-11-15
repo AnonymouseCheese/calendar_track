@@ -59,7 +59,7 @@ The user's rule: **data must never be wiped when the app is updated.**
 
 1. Bump `?v=N` on **every** asset in `index.html`.
 2. In `sw.js`, bump `CACHE` (`ct-vN`) and the `?v=N` entries in `SHELL` to match.
-3. Run all four test suites (below). Each must print `ALL PASSED`.
+3. Run all five test suites (below). Each must print `ALL PASSED`.
 4. Commit and push (DEPLOY.md, Case 1). Pages updates in ~1-2 min, and the
    phone picks it up on the next open while online.
 
@@ -74,6 +74,7 @@ cd .. && python -m http.server 8765 --bind 127.0.0.1
 node test.js           # 103 feature checks, drives real Edge at iPhone size
 node test_drag.js      # 12 checks: drag-to-reorder Active jobs with a real mouse
 node test_stages.js    # 30 checks: job stages / timeline / calendar link / settings list
+node test_bin.js       # 19 checks: recycle bin (undo, restore, delete forever, empty)
 node test_upgrade.js   # 17 checks: ships a fake next version and proves notes survive
 ```
 
@@ -140,6 +141,15 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
       - Settings > Job stages: add / remove / reorder the chip list.
       - Data: `job.stages[] = {id,name,done,doneAt,due}`, `data.stageLib[]`. Additive,
         so no SCHEMA bump was needed (older code keeps unknown fields).
+
+- [x] v7: ticking is only on the small box (tapping the text doesn't tick; in Week view it
+      opens the day). Every tick shows a 5-second Undo toast. `toast(msg, undoFn)`.
+- [x] v8: recycle bin. Delete moves the whole job to `data.bin = [{job, deletedAt}]` with an
+      Undo toast. The bin sheet opens from Old jobs ("Recycle bin (n)") and Settings, and has
+      Restore (back where it was, top of the list), Delete forever, and Empty bin.
+      Job cleaning is shared in `normJob()`. Stage due dates always show the date
+      (never "Due today"). Stages have a free-text `note` (Edit > Notes), shown under
+      the stage; earlier rounds' stage notes appear under "Show previous notes".
 
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code

@@ -58,13 +58,21 @@
   function pad16(n) { return (n < 16 ? '0' : '') + n.toString(16); }
 
   var toastTimer;
-  function toast(msg) {
+  function toast(msg, undo) {
     var t = $('toast');
     t.textContent = msg;
+    if (undo) {
+      t.appendChild(btn('Undo', 'toast-undo', function () {
+        t.hidden = true;
+        clearTimeout(toastTimer);
+        undo();
+      }));
+    }
     t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.hidden = true; }, 2200);
+    toastTimer = setTimeout(function () { t.hidden = true; }, undo ? 5000 : 2200);
   }
+  function shortText(s) { return s.length > 28 ? s.slice(0, 27) + '\u2026' : s; }
 
   // ---------- data ----------
   function emptyData() { return { schema: SCHEMA, days: {}, jobs: [] }; }
@@ -90,36 +98,51 @@
     }
     if (Array.isArray(d.jobs)) {
       d.jobs.forEach(function (j) {
-        if (!j || typeof j !== 'object') return;
-        var id = str(j.id) || uid();
-        out.jobs.push(Object.assign({}, j, {
-          id: id,
-          title: str(j.title) || 'Untitled job',
-          seriesId: str(j.seriesId) || id,
-          status: j.status === 'old' ? 'old' : 'active',
-          created: str(j.created) || nowIso(),
-          closed: j.status === 'old' ? (str(j.closed) || nowIso()) : null,
-          month: /^\d{4}-\d{2}$/.test(str(j.month)) ? j.month : undefined,
-          rank: typeof j.rank === 'number' && isFinite(j.rank) ? j.rank : undefined,
-          stages: Array.isArray(j.stages) ? j.stages.filter(function (st) {
-            return st && typeof st.name === 'string' && st.name.trim();
-          }).map(function (st) {
-            var day = /^\d{4}-\d{2}-\d{2}$/;
-            return Object.assign({}, st, {
-              id: str(st.id) || uid(), name: st.name.trim(), done: !!st.done,
-              doneAt: st.done && day.test(str(st.doneAt)) ? st.doneAt : null,
-              due: day.test(str(st.due)) ? st.due : null
-            });
-          }) : undefined,
-          notes: (Array.isArray(j.notes) ? j.notes : []).filter(function (n) {
-            return n && typeof n.text === 'string';
-          }).map(function (n) {
-            return Object.assign({}, n, { id: str(n.id) || uid(), at: str(n.at) || nowIso(), text: n.text });
-          })
-        }));
+        var c = normJob(j);
+        if (c) out.jobs.push(c);
       });
     }
+    // Recycle bin: deleted jobs, kept whole so they can be restored.
+    if (Array.isArray(d.bin)) {
+      out.bin = [];
+      d.bin.forEach(function (b) {
+        var c = b && normJob(b.job);
+        if (c) out.bin.push({ job: c, deletedAt: str(b.deletedAt) || nowIso() });
+      });
+    } else {
+      delete out.bin;
+    }
     return out;
+  }
+  function normJob(j) {
+    if (!j || typeof j !== 'object') return null;
+    var id = str(j.id) || uid();
+    return Object.assign({}, j, {
+      id: id,
+      title: str(j.title) || 'Untitled job',
+      seriesId: str(j.seriesId) || id,
+      status: j.status === 'old' ? 'old' : 'active',
+      created: str(j.created) || nowIso(),
+      closed: j.status === 'old' ? (str(j.closed) || nowIso()) : null,
+      month: /^\d{4}-\d{2}$/.test(str(j.month)) ? j.month : undefined,
+      rank: typeof j.rank === 'number' && isFinite(j.rank) ? j.rank : undefined,
+      stages: Array.isArray(j.stages) ? j.stages.filter(function (st) {
+        return st && typeof st.name === 'string' && st.name.trim();
+      }).map(function (st) {
+        var day = /^\d{4}-\d{2}-\d{2}$/;
+        return Object.assign({}, st, {
+          id: str(st.id) || uid(), name: st.name.trim(), done: !!st.done,
+          doneAt: st.done && day.test(str(st.doneAt)) ? st.doneAt : null,
+          due: day.test(str(st.due)) ? st.due : null,
+          note: typeof st.note === 'string' && st.note ? st.note : undefined
+        });
+      }) : undefined,
+      notes: (Array.isArray(j.notes) ? j.notes : []).filter(function (n) {
+        return n && typeof n.text === 'string';
+      }).map(function (n) {
+        return Object.assign({}, n, { id: str(n.id) || uid(), at: str(n.at) || nowIso(), text: n.text });
+      })
+    });
   }
 
   /*
@@ -282,6 +305,7 @@
     $('app').hidden = true;
     $('sheet-job').hidden = true;
     $('sheet-settings').hidden = true;
+    $('sheet-bin').hidden = true;
     $('lock').hidden = false;
     ['setup', 'code', 'unlock', 'forgot'].forEach(function (m) { $('lock-' + m).hidden = m !== mode; });
     ['setupPw1', 'setupPw2', 'unlockPw', 'forgotCode', 'forgotPw1', 'forgotPw2'].forEach(function (id) { $(id).value = ''; });
@@ -443,10 +467,19 @@
     var lines = (data.days[k] || '').split('\n');
     var raw = lines[idx];
     if (raw == null) return;
-    lines[idx] = TICK_RE.test(raw) ? raw.replace(TICK_RE, '$1') : raw.replace(/^(\s*)/, '$1' + TICK + ' ');
+    var wasDone = TICK_RE.test(raw);
+    lines[idx] = wasDone ? raw.replace(TICK_RE, '$1') : raw.replace(/^(\s*)/, '$1' + TICK + ' ');
     data.days[k] = lines.join('\n');
     if (!save()) return;
     renderCal();
+    var text = raw.replace(TICK_RE, '').trim();
+    toast((wasDone ? 'Unticked: ' : 'Ticked: ') + shortText(text), function () {
+      var now = (data.days[k] || '').split('\n');
+      if (now[idx] !== lines[idx]) return; // changed since, leave it alone
+      now[idx] = raw;
+      data.days[k] = now.join('\n');
+      if (save()) renderCal();
+    });
   }
   // Job stages due on a day (active jobs only) show up on the calendar too.
   function stageItemsOn(k) {
@@ -467,9 +500,22 @@
     var j = jobById(jobId);
     var st = j && (j.stages || []).filter(function (s) { return s.id === stId; })[0];
     if (!st) return;
+    var before = { done: st.done, doneAt: st.doneAt };
     toggleStage(st);
     if (!save()) return;
     renderCal();
+    toast((before.done ? 'Unticked: ' : 'Ticked: ') + shortText(j.title + ': ' + st.name), function () {
+      st.done = before.done;
+      st.doneAt = before.doneAt;
+      if (save()) renderCal();
+    });
+  }
+  function tickBox(done, label) {
+    var b = el('span', 'box');
+    b.setAttribute('role', 'checkbox');
+    b.setAttribute('aria-checked', done ? 'true' : 'false');
+    b.setAttribute('aria-label', label);
+    return b;
   }
   function checklist(k, onlyStages) {
     var items = onlyStages ? [] : dayItemsOf(k);
@@ -481,9 +527,7 @@
       li.dataset.kind = 'stage';
       li.dataset.job = s.job.id;
       li.dataset.stage = s.st.id;
-      li.setAttribute('role', 'checkbox');
-      li.setAttribute('aria-checked', s.st.done ? 'true' : 'false');
-      li.appendChild(el('span', 'box'));
+      li.appendChild(tickBox(s.st.done, s.job.title + ': ' + s.st.name));
       li.appendChild(el('span', 'txt', s.job.title + ': ' + s.st.name));
       ul.appendChild(li);
     });
@@ -491,9 +535,7 @@
       var li = el('li', 'check' + (it.done ? ' done' : ''));
       li.dataset.key = k;
       li.dataset.idx = it.i;
-      li.setAttribute('role', 'checkbox');
-      li.setAttribute('aria-checked', it.done ? 'true' : 'false');
-      li.appendChild(el('span', 'box'));
+      li.appendChild(tickBox(it.done, it.text));
       li.appendChild(el('span', 'txt', it.text));
       ul.appendChild(li);
     });
@@ -505,10 +547,12 @@
     var left = items.filter(function (it) { return !it.done; }).length;
     return left ? el('span', 'left', left + ' left') : el('span', 'left all', 'All done');
   }
-  // Ticking works anywhere a checklist is shown.
+  // Ticking works anywhere a checklist is shown, but only on the box itself so a
+  // stray tap on the text doesn't tick anything. Every tick offers Undo.
   document.addEventListener('click', function (e) {
-    var li = e.target.closest && e.target.closest('.check');
-    if (!li || !unlocked) return;
+    var box = e.target.closest && e.target.closest('.check .box');
+    if (!box || !unlocked) return;
+    var li = box.closest('.check');
     e.stopPropagation();
     if (li.dataset.kind === 'stage') toggleStageFromCal(li.dataset.job, li.dataset.stage);
     else toggleItem(li.dataset.key, +li.dataset.idx);
@@ -875,7 +919,8 @@
     var jobs = all.filter(function (j) {
       if (!q) return true;
       if (j.title.toLowerCase().indexOf(q) >= 0) return true;
-      return j.notes.some(function (n) { return n.text.toLowerCase().indexOf(q) >= 0; });
+      return j.notes.some(function (n) { return n.text.toLowerCase().indexOf(q) >= 0; }) ||
+        stageNotesOf(j).some(function (st) { return st.note.toLowerCase().indexOf(q) >= 0; });
     }).sort(function (a, b) {
       var ma = jobMonth(a), mb = jobMonth(b);
       if (ma !== mb) return ma < mb ? 1 : -1;
@@ -905,6 +950,9 @@
     var empty = $('oldEmpty');
     empty.hidden = jobs.length > 0;
     empty.textContent = all.length ? 'No old jobs match that search.' : 'No old jobs yet. When you mark a job as done, it moves here.';
+    var nBin = (data.bin || []).length;
+    $('binOpen').hidden = !nBin;
+    $('binOpen').textContent = 'Recycle bin (' + nBin + ')';
   }
   $('oldSearch').addEventListener('input', renderOld);
 
@@ -1001,8 +1049,9 @@
       var main = el('div', 'st-main');
       main.appendChild(el('div', 'st-name', st.name));
       var sub = st.done ? (st.doneAt ? 'Done ' + fmtDay(st.doneAt) : 'Done')
-        : st.due ? (st.due === dayKey(new Date()) ? 'Due today' : 'Due ' + fmtDay(st.due)) : '';
+        : st.due ? 'Due ' + fmtDay(st.due) : '';
       if (sub) main.appendChild(el('div', 'st-sub' + (stageLate(st) ? ' late' : ''), sub));
+      if (st.note && st.note.trim()) main.appendChild(el('div', 'st-note', st.note));
       var more = btn(stageUi.editId === st.id ? 'Close' : 'Edit', 'link st-more', function () {
         stageUi.editId = stageUi.editId === st.id ? null : st.id;
         renderJob();
@@ -1099,6 +1148,14 @@
         renderJob();
       });
     }
+    var note = el('textarea');
+    note.placeholder = 'Notes for this stage';
+    note.value = st.note || '';
+    field('Notes', note).addEventListener('input', function () {
+      if (note.value.trim()) st.note = note.value;
+      else delete st.note;
+      save();
+    });
     var btns = el('div', 'btns');
     function move(delta) {
       var k = i + delta;
@@ -1227,8 +1284,8 @@
     renderStages(j);
 
     // Notes from the other rounds of a recurring job.
-    var others = s.filter(function (x) { return x !== j && x.notes.length; }).reverse();
-    var otherCount = others.reduce(function (n, x) { return n + x.notes.length; }, 0);
+    var others = s.filter(function (x) { return x !== j && (x.notes.length || stageNotesOf(x).length); }).reverse();
+    var otherCount = others.reduce(function (n, x) { return n + x.notes.length + stageNotesOf(x).length; }, 0);
     $('prevWrap').hidden = otherCount === 0;
     $('prevLabel').textContent = (isOld ? 'Show notes from other rounds' : 'Show previous notes') + ' (' + otherCount + ')';
     var prev = $('prevNotes');
@@ -1243,6 +1300,12 @@
           var box = el('div', 'note past');
           box.appendChild(el('div', 'note-when', fmtDateTime(n.at)));
           box.appendChild(el('div', 'note-text', n.text));
+          prev.appendChild(box);
+        });
+        stageNotesOf(x).forEach(function (st) {
+          var box = el('div', 'note past');
+          box.appendChild(el('div', 'note-when', 'Stage: ' + st.name + (st.doneAt ? ' (done ' + fmtDay(st.doneAt) + ')' : '')));
+          box.appendChild(el('div', 'note-text', st.note));
           prev.appendChild(box);
         });
       });
@@ -1267,6 +1330,9 @@
     act.appendChild(btn('Delete this job', 'danger', function () { deleteJob(j); }));
   }
 
+  function stageNotesOf(j) {
+    return (j.stages || []).filter(function (st) { return st.note && st.note.trim(); });
+  }
   function sortedNotes(j) {
     return j.notes.slice().sort(function (a, b) { return a.at < b.at ? 1 : -1; });
   }
@@ -1355,13 +1421,74 @@
     closeJob();
     toast('Moved back to Active jobs');
   }
+  // ---------- recycle bin ----------
+  // Deleted jobs go to data.bin = [{ job, deletedAt }] whole (notes, stages and
+  // all), so they can be put back exactly as they were.
   function deleteJob(j) {
-    if (!confirm('Delete "' + j.title + '" and its ' + plural(j.notes.length, 'note') + "? This can't be undone.")) return;
     data.jobs = data.jobs.filter(function (x) { return x !== j; });
-    save();
+    data.bin = (data.bin || []).concat([{ job: j, deletedAt: nowIso() }]);
+    if (!save()) return;
     closeJob();
-    toast('Job deleted');
+    toast('Moved to the recycle bin', function () { restoreJob(j.id); });
   }
+  function restoreJob(id) {
+    var b = (data.bin || []).filter(function (x) { return x.job.id === id; })[0];
+    if (!b) return;
+    data.bin = data.bin.filter(function (x) { return x !== b; });
+    delete b.job.rank; // comes back at the top of Active jobs
+    data.jobs.push(b.job);
+    if (!save()) return;
+    if (!$('sheet-bin').hidden) renderBin();
+    renderTab();
+    toast('Restored to ' + (b.job.status === 'old' ? 'Old jobs' : 'Active jobs'));
+  }
+  function renderBin() {
+    var list = $('binList');
+    list.textContent = '';
+    var bin = (data.bin || []).slice().sort(function (a, b) { return a.deletedAt < b.deletedAt ? 1 : -1; });
+    bin.forEach(function (b) {
+      var j = b.job;
+      var card = el('div', 'bin-card');
+      card.appendChild(el('div', 'card-title', j.title));
+      var parts = ['Was in ' + (j.status === 'old' ? 'Old jobs' : 'Active jobs'), 'deleted ' + fmtDate(b.deletedAt),
+        plural(j.notes.length, 'note')];
+      if (j.stages && j.stages.length) parts.push(plural(j.stages.length, 'stage'));
+      card.appendChild(el('div', 'card-meta', parts.join(' · ')));
+      var row = el('div', 'bin-btns');
+      row.appendChild(btn('Restore', 'small primary', function () { restoreJob(j.id); }));
+      row.appendChild(btn('Delete forever', 'small danger', function () {
+        if (!confirm('Delete "' + j.title + '" forever? Its notes will be gone and this can\'t be undone.')) return;
+        data.bin = data.bin.filter(function (x) { return x !== b; });
+        save();
+        renderBin();
+      }));
+      card.appendChild(row);
+      list.appendChild(card);
+    });
+    $('binEmpty').hidden = bin.length > 0;
+    $('binEmptyAll').hidden = !bin.length;
+  }
+  function openBin() {
+    flushAll();
+    $('sheet-bin').hidden = false;
+    $('sheet-bin').scrollTop = 0;
+    renderBin();
+  }
+  function closeBin() {
+    $('sheet-bin').hidden = true;
+    if (!$('sheet-settings').hidden) renderSettings();
+    renderTab();
+  }
+  $('binOpen').addEventListener('click', openBin);
+  $('binOpen2').addEventListener('click', openBin);
+  $('binBack').addEventListener('click', closeBin);
+  $('binEmptyAll').addEventListener('click', function () {
+    var n = (data.bin || []).length;
+    if (!n || !confirm('Delete all ' + plural(n, 'job') + " in the recycle bin forever? This can't be undone.")) return;
+    data.bin = [];
+    save();
+    renderBin();
+  });
 
   // ---------- backup banner ----------
   function daysSinceBackup() {
@@ -1405,6 +1532,7 @@
 
   function renderSettings() {
     renderLib();
+    $('binOpen2').textContent = 'Open the recycle bin (' + (data.bin || []).length + ')';
     var lb = localStorage.getItem(KEY_BACKUP), d = daysSinceBackup();
     $('backupInfo').textContent = lb
       ? 'Last backup: ' + fmtDate(lb) + (d === 0 ? ' (today)' : ' (' + plural(d, 'day') + ' ago)') + '.'

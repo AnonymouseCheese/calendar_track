@@ -102,7 +102,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok((await page.$$eval('#week .wk-empty', e => e.length)) >= 5, 'empty days say Nothing');
 
   // ticking
-  const tick = async (sel, i) => { await page.evaluate((s, n) => document.querySelectorAll(s)[n].click(), sel, i); await wait(120); };
+  const tick = async (sel, i) => { await page.evaluate((s, n) => document.querySelectorAll(s)[n].querySelector('.box').click(), sel, i); await wait(120); };
   await tick('#week .wk-row.today .check', 0);
   stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
   ok(stored.days[todayKey].split('\n')[0] === '✓ Dentist 3pm', 'ticking saves a check mark on that line');
@@ -115,6 +115,15 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok((await page.$eval('#week .wk-row.today .left', e => e.textContent)) === '1 left', 'untick brings it back: 1 left');
   stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
   ok(stored.days[todayKey].split('\n')[5] === 'Pick up banner', 'untick removes the check mark');
+  // tapping the text does not tick; Undo reverses a tick
+  const beforeTap = (await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')))).days[todayKey];
+  await page.evaluate(() => document.querySelector('#week .wk-row.today .check .txt').click()); await wait(150);
+  ok((await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')))).days[todayKey] === beforeTap, 'tapping the item text does not tick it');
+  if ((await page.$$('#week .wk-row.sel')).length) { await page.evaluate(() => document.querySelector('#week .wk-row.sel .wk-btn').click()); await wait(150); }
+  await tick('#week .wk-row.today .check', 4);
+  ok(await vis('#toast') && (await page.$eval('#toast', t => t.textContent)).includes('Ticked: Pick up banner'), 'tick shows a message with Undo');
+  await page.click('#toast .toast-undo'); await wait(150);
+  ok((await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')))).days[todayKey] === beforeTap, 'Undo puts it back');
   await page.screenshot({ path: path.join(OUT, 's1b_week.png'), fullPage: true });
 
   const wkLabel = await page.$eval('#mLabel', e => e.textContent);

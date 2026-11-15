@@ -152,7 +152,8 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .left.all { color: var(--done); }
 
 .checks { list-style: none; margin: 4px 0 0; padding: 0; }
-.check { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; cursor: pointer; }
+.check { display: flex; align-items: flex-start; gap: 12px; padding: 5px 0; }
+.check .box { cursor: pointer; }
 .check .box {
   flex: none; width: 22px; height: 22px; margin-top: 1px;
   border: 2px solid var(--muted); border-radius: 6px;
@@ -306,6 +307,10 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); }
 
 /* ---------- toast ---------- */
+.toast-undo {
+  margin-left: 12px; padding: 2px 10px; font-size: 14px; font-weight: 700;
+  background: none; border: 1px solid #fff6; color: #8fb3ff; border-radius: 999px;
+}
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 60;
@@ -365,3 +370,15 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .lib-row span { flex: 1; min-width: 0; }
 .lib-row button { padding: 4px 10px; }
 #libList + .add-row { margin-top: 10px; }
+
+/* ---------- stage notes / recycle bin ---------- */
+.st-note {
+  font-size: 14px; white-space: pre-wrap; word-break: break-word;
+  margin-top: 4px; padding: 2px 0 2px 8px; border-left: 3px solid var(--line);
+}
+.st-edit label:has(textarea) { align-items: flex-start; }
+.st-edit textarea { min-height: 70px; padding: 6px 8px; }
+.bin-link { display: block; margin: 18px auto 0; }
+.bin-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.bin-btns { display: flex; gap: 8px; margin-top: 10px; }
+#binEmptyAll { margin-top: 20px; }

@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 
@@ -120,6 +120,7 @@
       <input id="oldSearch" type="search" placeholder="Search old jobs and their notes" autocomplete="off">
       <div id="oldList" class="list"></div>
       <p id="oldEmpty" class="empty" hidden>No old jobs yet. When you mark a job as done, it moves here.</p>
+      <button id="binOpen" class="link bin-link" type="button" hidden></button>
     </section>
   </main>
 
@@ -215,13 +216,31 @@
       <button id="libAdd" class="primary" type="button">Add</button>
     </div>
 
+    <h3>Recycle bin</h3>
+    <p class="muted tiny">Deleted jobs are kept here, with all their notes, until you delete them forever.</p>
+    <button id="binOpen2" class="wide" type="button">Open the recycle bin</button>
+
     <h3>On this phone</h3>
     <p id="storageInfo" class="muted tiny"></p>
   </div>
 </div>
 
+<!-- Recycle bin -->
+<div id="sheet-bin" class="sheet" hidden>
+  <div class="sheet-head">
+    <button id="binBack" class="link" type="button">&lsaquo; Back</button>
+    <span class="sheet-title">Recycle bin</span>
+  </div>
+  <div class="sheet-body">
+    <p class="muted tiny">Deleted jobs stay here, with all their notes and stages, until you delete them forever.</p>
+    <div id="binList" class="list"></div>
+    <p id="binEmpty" class="empty" hidden>The recycle bin is empty.</p>
+    <button id="binEmptyAll" class="wide danger" type="button">Empty the recycle bin</button>
+  </div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
