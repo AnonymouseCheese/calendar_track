@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -78,17 +78,24 @@
 
   <main>
     <section id="view-calendar" class="view">
-      <div class="month-nav">
-        <button id="mPrev" type="button" aria-label="Previous month">&lsaquo;</button>
-        <div id="mLabel" class="month-label"></div>
-        <button id="mNext" type="button" aria-label="Next month">&rsaquo;</button>
+      <div class="mode-bar">
+        <div class="seg">
+          <button data-mode="month" type="button">Month</button>
+          <button data-mode="week" type="button">Week</button>
+        </div>
+        <button id="btnToday" class="small" type="button">Today</button>
       </div>
-      <div class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+      <div class="month-nav">
+        <button id="mPrev" type="button" aria-label="Back">&lsaquo;</button>
+        <div id="mLabel" class="month-label"></div>
+        <button id="mNext" type="button" aria-label="Forward">&rsaquo;</button>
+      </div>
+      <div id="weekdays" class="weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
       <div id="grid" class="grid"></div>
-      <div class="day-panel">
-        <div class="day-head">
+      <div id="week" class="week" hidden></div>
+      <div id="dayPanel" class="day-panel">
+        <div id="dayHead" class="day-head">
           <span id="dayLabel"></span>
-          <button id="btnToday" class="small" type="button">Today</button>
         </div>
         <textarea id="dayNote" placeholder="Write something for this day..."></textarea>
         <div id="daySaved" class="muted tiny"></div>
@@ -190,6 +197,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

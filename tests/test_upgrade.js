@@ -46,16 +46,19 @@ for (const f of fs.readdirSync(SRC)) {
   ok(before.includes('Version 1 note') && before.includes('note from v1'), 'v1 data saved');
 
   // --- ship "version 2" ---
-  let html = fs.readFileSync(path.join(COPY, 'index.html'), 'utf8').replace(/\?v=1/g, '?v=2').replace('<title>Calendar Track</title>', '<title>Calendar Track v2</title>');
+  // Bump whatever version is current (N) to N+1, exactly as a real release does.
+  const cur = +fs.readFileSync(path.join(COPY, 'sw.js'), 'utf8').match(/'ct-v(\d+)'/)[1], nxt = cur + 1;
+  const bump = t => t.split('?v=' + cur + '"').join('?v=' + nxt + '"').split('?v=' + cur + "'").join('?v=' + nxt + "'");
+  let html = bump(fs.readFileSync(path.join(COPY, 'index.html'), 'utf8')).replace('<title>Calendar Track</title>', '<title>Calendar Track next</title>');
   fs.writeFileSync(path.join(COPY, 'index.html'), html);
-  let sw = fs.readFileSync(path.join(COPY, 'sw.js'), 'utf8').replace("'ct-v1'", "'ct-v2'").replace(/\?v=1/g, '?v=2');
+  let sw = bump(fs.readFileSync(path.join(COPY, 'sw.js'), 'utf8').replace("'ct-v" + cur + "'", "'ct-v" + nxt + "'"));
   fs.writeFileSync(path.join(COPY, 'sw.js'), sw);
 
   await page.reload({ waitUntil: 'networkidle0' }); await wait(1500);
   await page.reload({ waitUntil: 'networkidle0' }); await wait(1000);
-  ok((await page.title()) === 'Calendar Track v2', 'new version is live after reload');
+  ok((await page.title()) === 'Calendar Track next', 'new version is live after reload');
   const caches = await page.evaluate(() => caches.keys());
-  ok(caches.includes('ct-v2') && !caches.includes('ct-v1'), 'old code cache replaced: ' + caches.join(','));
+  ok(caches.includes('ct-v' + nxt) && !caches.includes('ct-v' + cur), 'old code cache replaced: ' + caches.join(','));
   ok(await vis('#lock-unlock'), 'still asks for the SAME password (not setup again)');
   await unlock();
   ok(await vis('#app'), 'old password works on new version');

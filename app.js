@@ -271,7 +271,9 @@
     dayEditKey = null;
     openId = null;
     editingNoteId = null;
+    parkPanel();
     $('grid').textContent = '';
+    $('week').textContent = '';
     $('dayNote').value = '';
     $('activeList').textContent = '';
     $('oldList').textContent = '';
@@ -390,7 +392,68 @@
   var dayTimer = null;
   var dayEditKey = null;
 
+  // Month view (overview grid) or Week view (every item of each day, full width).
+  var calMode = localStorage.getItem('ct.calMode') === 'week' ? 'week' : 'month';
+
+  // The day editor is one element that moves between the month view (below the
+  // grid) and the selected row of the week view. Put it back before clearing lists.
+  function parkPanel() { $('view-calendar').appendChild($('dayPanel')); }
+
   function renderCal() {
+    parkPanel();
+    var isWeek = calMode === 'week';
+    Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+      b.classList.toggle('on', b.dataset.mode === calMode);
+    });
+    $('weekdays').hidden = isWeek;
+    $('grid').hidden = isWeek;
+    $('week').hidden = !isWeek;
+    $('dayHead').hidden = isWeek;
+    if (isWeek) renderWeek();
+    else renderMonth();
+    renderDay();
+  }
+
+  function renderWeek() {
+    var sel = keyToDate(selKey);
+    var start = new Date(sel.getFullYear(), sel.getMonth(), sel.getDate() - sel.getDay());
+    var end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    $('mLabel').textContent = start.getDate() + ' ' + MON[start.getMonth()] +
+      (start.getFullYear() !== end.getFullYear() ? ' ' + start.getFullYear() : '') +
+      ' – ' + end.getDate() + ' ' + MON[end.getMonth()] + ' ' + end.getFullYear();
+    var wk = $('week');
+    wk.textContent = '';
+    var todayKey = dayKey(new Date());
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      var k = dayKey(d);
+      var row = el('div', 'wk-row');
+      row.dataset.key = k;
+      if (k === todayKey) row.classList.add('today');
+      var head = el('div', 'wk-head');
+      head.appendChild(el('span', 'wk-date', DAYS[d.getDay()].slice(0, 3) + ' ' + d.getDate() + ' ' + MON[d.getMonth()]));
+      if (k === todayKey) head.appendChild(el('span', 'pill active', 'Today'));
+      row.appendChild(head);
+      if (k === selKey) {
+        row.classList.add('sel');
+        row.appendChild($('dayPanel'));
+      } else {
+        row.appendChild(dayItems(k));
+      }
+      wk.appendChild(row);
+    }
+  }
+
+  // Each line of a day's note is shown as its own item.
+  function dayItems(k) {
+    var lines = (data.days[k] || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!lines.length) return el('div', 'wk-empty', 'Nothing');
+    var ul = el('ul', 'wk-items');
+    lines.forEach(function (s) { ul.appendChild(el('li', null, s)); });
+    return ul;
+  }
+
+  function renderMonth() {
     $('mLabel').textContent = MONTHS[viewM] + ' ' + viewY;
     var grid = $('grid');
     grid.textContent = '';
@@ -411,7 +474,6 @@
       fillCell(b, k);
       grid.appendChild(b);
     }
-    renderDay();
   }
   function fillCell(b, k) {
     var old = b.querySelector('.snip');
@@ -461,27 +523,60 @@
     var cell = e.target.closest('.cell');
     if (cell) selectDay(cell.dataset.key);
   });
-  function moveMonth(delta) {
+  // Arrows / swipe: a month at a time in Month view, a week at a time in Week view.
+  function moveBy(delta) {
     commitDay();
-    var d = new Date(viewY, viewM + delta, 1);
-    viewY = d.getFullYear(); viewM = d.getMonth();
+    if (calMode === 'week') {
+      var s = keyToDate(selKey);
+      selKey = dayKey(new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7 * delta));
+      s = keyToDate(selKey);
+      viewY = s.getFullYear(); viewM = s.getMonth();
+    } else {
+      var d = new Date(viewY, viewM + delta, 1);
+      viewY = d.getFullYear(); viewM = d.getMonth();
+    }
     renderCal();
   }
-  $('mPrev').addEventListener('click', function () { moveMonth(-1); });
-  $('mNext').addEventListener('click', function () { moveMonth(1); });
+  $('mPrev').addEventListener('click', function () { moveBy(-1); });
+  $('mNext').addEventListener('click', function () { moveBy(1); });
   $('btnToday').addEventListener('click', function () { selectDay(dayKey(new Date())); });
 
-  // Swipe left / right on the month to change it.
+  $('week').addEventListener('click', function (e) {
+    var row = e.target.closest('.wk-row');
+    if (row && !row.classList.contains('sel')) selectDay(row.dataset.key);
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+    b.addEventListener('click', function () {
+      if (calMode === b.dataset.mode) return;
+      commitDay();
+      calMode = b.dataset.mode;
+      localStorage.setItem('ct.calMode', calMode);
+      // Going to Week after browsing to another month: show that month's first week.
+      var s = keyToDate(selKey);
+      if (calMode === 'week' && (s.getFullYear() !== viewY || s.getMonth() !== viewM)) {
+        var t = new Date();
+        selKey = t.getFullYear() === viewY && t.getMonth() === viewM ? dayKey(t) : dayKey(new Date(viewY, viewM, 1));
+      }
+      renderCal();
+      window.scrollTo(0, 0);
+    });
+  });
+
+  // Swipe left / right on the month or week to move.
   var touchX = null, touchY = null;
-  $('grid').addEventListener('touchstart', function (e) {
-    touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
-  }, { passive: true });
-  $('grid').addEventListener('touchend', function (e) {
-    if (touchX == null) return;
-    var dx = e.changedTouches[0].clientX - touchX, dy = e.changedTouches[0].clientY - touchY;
-    touchX = null;
-    if (Math.abs(dx) > 60 && Math.abs(dy) < 40) moveMonth(dx < 0 ? 1 : -1);
-  }, { passive: true });
+  ['grid', 'week'].forEach(function (id) {
+    $(id).addEventListener('touchstart', function (e) {
+      if (e.target.closest('textarea')) { touchX = null; return; }
+      touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
+    }, { passive: true });
+    $(id).addEventListener('touchend', function (e) {
+      if (touchX == null) return;
+      var dx = e.changedTouches[0].clientX - touchX, dy = e.changedTouches[0].clientY - touchY;
+      touchX = null;
+      if (Math.abs(dx) > 60 && Math.abs(dy) < 40) moveBy(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  });
 
   // ---------- jobs ----------
   function jobById(id) {

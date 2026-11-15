@@ -71,7 +71,7 @@ npm install            # first time only (puppeteer-core; node_modules is gitign
 # terminal 1: serve the app
 cd .. && python -m http.server 8765 --bind 127.0.0.1
 # terminal 2:
-node test.js           # 54 feature checks, drives real Edge at iPhone size
+node test.js           # 67 feature checks, drives real Edge at iPhone size
 node test_upgrade.js   # 17 checks: ships a fake v2 and proves notes survive
 ```
 
@@ -94,6 +94,12 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
 - [x] Found and fixed a bug where lock then unlock wiped the open day's note (covered by a test)
 - [x] Both test suites passing
 
+- [x] v2 (2026-11-15): Month | Week switch. The month boxes were too small to show a
+      busy day. Week view = 7 full-width rows, each line of a day's note shown
+      as its own item. The tapped day's editor opens inside its row (the single
+      `#dayPanel` element is moved; `parkPanel()` puts it back before any list
+      is cleared). Mode remembered in `ct.calMode`. Week starts Sunday, like the grid.
+- [x] Upgrade test now bumps whatever the current version is (no hardcoded v1/v2)
 - [x] Deployed 2026-11-15: public repo AnonymouseCheese/calendar_track, Pages built,
       registered in GitHub Desktop, live-site smoke test passed (https, service worker active)
 

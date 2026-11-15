@@ -69,6 +69,41 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await click('#btnToday');
   await page.screenshot({ path: path.join(OUT, 's1_calendar.png') });
 
+  // 2b. week view
+  await click('.seg button[data-mode="week"]');
+  ok(await vis('#week') && !(await vis('#grid')), 'week view replaces month grid');
+  ok((await page.$$('#week .wk-row')).length === 7, 'week shows 7 days');
+  ok(await page.$eval('#week .wk-row.sel', r => r.classList.contains('today') && !!r.querySelector('#dayNote')), 'today selected with editor inside its row');
+  await page.click('#dayNote');
+  await page.keyboard.press('End');
+  await page.$eval('#dayNote', t => { t.setSelectionRange(t.value.length, t.value.length); });
+  await page.type('#dayNote', '\nCall printer re: mailer\n\nTeam lunch\nPick up banner');
+  const todayNote = 'Dentist 3pm\nBring forms\nCall printer re: mailer\n\nTeam lunch\nPick up banner';
+  const otherRow = await page.$$eval('#week .wk-row:not(.sel)', rs => rs[0].dataset.key);
+  await page.click('#week .wk-row[data-key="' + otherRow + '"]'); await wait(150);
+  stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
+  ok(stored.days[todayKey] === todayNote, 'week edit saved when tapping another day');
+  const items = await page.$$eval('#week .wk-row.today li', ls => ls.map(l => l.textContent));
+  ok(items.length === 5 && items[2] === 'Call printer re: mailer', 'every line shown as its own item (blank lines skipped): ' + items.length);
+  ok(await page.$eval('#week .wk-row[data-key="' + otherRow + '"]', r => r.classList.contains('sel') && !!r.querySelector('#dayNote')), 'editor moved to tapped day');
+  ok((await page.$$eval('#week .wk-empty', e => e.length)) >= 5, 'empty days say Nothing');
+  await page.screenshot({ path: path.join(OUT, 's1b_week.png'), fullPage: true });
+  const wkLabel = await page.$eval('#mLabel', e => e.textContent);
+  await click('#mNext');
+  ok((await page.$eval('#mLabel', e => e.textContent)) !== wkLabel && (await page.$$('#week .wk-row')).length === 7, 'arrow moves a week');
+  await click('#mPrev');
+  ok((await page.$eval('#mLabel', e => e.textContent)) === wkLabel, 'back arrow returns');
+  await click('#btnToday');
+  ok(await page.$eval('#week .wk-row.sel', r => r.classList.contains('today')), 'Today button works in week view');
+  // lock / unlock keeps week view and the note
+  await click('#btnLock');
+  ok(await page.$('#dayPanel') !== null, 'day editor not destroyed by lock');
+  await type('#unlockPw', 'ben'); await click('#unlockGo'); await wait(1000);
+  ok(await vis('#week') && (await page.$eval('#dayNote', t => t.value)) === todayNote, 'after unlock: still week view, note intact');
+  // month view again: editor back under the grid
+  await click('.seg button[data-mode="month"]');
+  ok(await vis('#grid') && await page.$eval('#dayPanel', p => !p.closest('#week')), 'month view restores editor below grid');
+
   // 3. jobs
   await click('.tabs button[data-tab="active"]');
   ok(await vis('#activeEmpty'), 'empty active message');
@@ -177,7 +212,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok((await page.$eval('#importErr', e => e.textContent)).includes('Wrong password'), 'wrong backup password rejected');
   await type('#importPw', 'filepw'); await click('#importOpen'); await wait(2000);
   stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ct.data')));
-  ok(stored.jobs.length === 3 && stored.days[todayKey] === 'Dentist 3pm\nBring forms', 'import restored everything');
+  ok(stored.jobs.length === 3 && stored.days[todayKey] === todayNote, 'import restored everything');
   ok(dialogs.some(d => d.startsWith('Replace everything')), 'import asked to confirm');
 
   // non-backup file
