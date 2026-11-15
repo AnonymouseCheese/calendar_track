@@ -94,8 +94,10 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
 - [x] Found and fixed a bug where lock then unlock wiped the open day's note (covered by a test)
 - [x] Both test suites passing
 
+- [x] Deployed 2026-11-15: public repo AnonymouseCheese/calendar_track, Pages built,
+      registered in GitHub Desktop, live-site smoke test passed (https, service worker active)
+
 ### To do next
-- [ ] Deploy (new repo, Pages on, GitHub Desktop) - see DEPLOY.md Case 2
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code
 - [ ] User does a first backup and test-restores it once
 
