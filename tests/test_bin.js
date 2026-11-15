@@ -30,7 +30,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.type('#newJobTitle', 'Precious job'); await page.click('#newJobGo'); await wait(200);
   await clickText('#stageAdd .chip', '+ Quotation');
   await clickText('#stageAdd .chip', '+ Printing');
-  await page.click('#stages .stage .st-dot'); await wait(120);
+  await page.evaluate(() => [...document.querySelectorAll('#stages .stage .st-dot')].pop().click()); await wait(120); // Quotation, at the bottom
   await page.type('#noteNew', 'Important note 1'); await page.click('#noteAdd'); await wait(100);
   await page.type('#noteNew', 'Important note 2'); await page.click('#noteAdd'); await wait(100);
   await page.click('#jobBack'); await wait(100);

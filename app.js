@@ -309,6 +309,7 @@
     $('sheet-job').hidden = true;
     $('sheet-settings').hidden = true;
     $('sheet-bin').hidden = true;
+    $('sheet-overview').hidden = true;
     $('lock').hidden = false;
     ['setup', 'code', 'unlock', 'forgot'].forEach(function (m) { $('lock-' + m).hidden = m !== mode; });
     ['setupPw1', 'setupPw2', 'unlockPw', 'forgotCode', 'forgotPw1', 'forgotPw2'].forEach(function (id) { $(id).value = ''; });
@@ -933,6 +934,7 @@
       list.appendChild(row);
     });
     $('activeEmpty').hidden = jobs.length > 0;
+    $('ovOpen').hidden = !jobs.length;
     $('activeEmpty').textContent = kindWords().none;
     $('dragTip').hidden = jobs.length < 2;
   }
@@ -1123,8 +1125,10 @@
     var stages = j.stages || [];
     var nextIdx = -1;
     for (var i = 0; i < stages.length; i++) if (!stages[i].done) { nextIdx = i; break; }
-    stages.forEach(function (st, i) {
-      var row = el('div', 'stage' + (st.done ? ' done' : '') + (i === nextIdx ? ' next' : '') + (i === stages.length - 1 ? ' last' : ''));
+    // Latest stages at the top: drawn bottom-up (the stored order stays first-to-last).
+    stages.slice().reverse().forEach(function (st) {
+      var i = stages.indexOf(st);
+      var row = el('div', 'stage' + (st.done ? ' done' : '') + (i === nextIdx ? ' next' : '') + (i === 0 ? ' last' : ''));
       row.dataset.id = st.id;
       var dot = btn('', 'st-dot', function () {
         toggleStage(st);
@@ -1250,10 +1254,11 @@
       save();
       renderJob();
     }
-    var up = btn('Move up', 'small', function () { move(-1); });
-    up.disabled = i === 0;
-    var down = btn('Move down', 'small', function () { move(1); });
-    down.disabled = i === j.stages.length - 1;
+    // On screen the list is upside down, so "up" means later in the order.
+    var up = btn('Move up', 'small', function () { move(1); });
+    up.disabled = i === j.stages.length - 1;
+    var down = btn('Move down', 'small', function () { move(-1); });
+    down.disabled = i === 0;
     btns.appendChild(up);
     btns.appendChild(down);
     btns.appendChild(btn('Remove', 'small danger', function () {
@@ -1342,6 +1347,7 @@
     editingNoteId = null;
     $('sheet-job').hidden = true;
     renderTab();
+    if (!$('sheet-overview').hidden) renderOverview();
   }
   $('jobBack').addEventListener('click', closeJob);
 
@@ -1516,6 +1522,92 @@
     closeJob();
     toast('Moved back to ' + wordsFor(j).active);
   }
+  // ---------- overview: every active job grouped by the stage it's at ----------
+  function openOverview() {
+    flushAll();
+    $('sheet-overview').hidden = false;
+    $('sheet-overview').scrollTop = 0;
+    renderOverview();
+  }
+  function closeOverview() {
+    $('sheet-overview').hidden = true;
+    renderTab();
+  }
+  $('ovOpen').addEventListener('click', openOverview);
+  $('ovBack').addEventListener('click', closeOverview);
+
+  function currentStage(j) { return (j.stages || []).filter(function (s) { return !s.done; })[0] || null; }
+
+  function renderOverview() {
+    var jobs = activeInOrder();
+    $('ovTitle').textContent = 'Overview · ' + kindWords().active;
+    var box = $('ovList');
+    box.textContent = '';
+    // Groups: stages in the stage-list order, then unknown stage names, then
+    // "All stages done", then "No stages yet".
+    var groups = {}, keys = [];
+    function put(key, label, rank, j) {
+      if (!groups[key]) { groups[key] = { label: label, rank: rank, jobs: [] }; keys.push(key); }
+      groups[key].jobs.push(j);
+    }
+    var late = 0;
+    jobs.forEach(function (j) {
+      var st = j.stages || [];
+      var cur = currentStage(j);
+      if (st.some(stageLate)) late++;
+      if (!st.length) put('~none', 'No stages yet', [3, 0, ''], j);
+      else if (!cur) put('~done', 'All stages done', [2, 0, ''], j);
+      else {
+        var li = libIndex(cur.name, j.kind);
+        put('s:' + cur.name.toLowerCase(), cur.name, [li >= 0 ? 0 : 1, li, cur.name.toLowerCase()], j);
+      }
+    });
+    keys.sort(function (a, b) {
+      var x = groups[a].rank, y = groups[b].rank;
+      return x[0] - y[0] || x[1] - y[1] || (x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0);
+    });
+    $('ovLate').hidden = !late;
+    $('ovLate').textContent = plural(late, wordsFor({ kind: listKind === 'misc' ? 'misc' : undefined }).thing) + ' late';
+    keys.forEach(function (key) {
+      var g = groups[key];
+      var head = el('div', 'ov-head');
+      head.appendChild(el('span', null, g.label));
+      head.appendChild(el('span', 'n', String(g.jobs.length)));
+      box.appendChild(head);
+      g.jobs.forEach(function (j) { box.appendChild(overviewRow(j)); });
+    });
+    $('ovEmpty').hidden = jobs.length > 0;
+    $('ovEmpty').textContent = kindWords().none;
+  }
+
+  function overviewRow(j) {
+    var st = j.stages || [];
+    var cur = currentStage(j);
+    var row = el('button', 'ov-row');
+    row.type = 'button';
+    var main = el('div', 'ov-main');
+    main.appendChild(el('div', 'ov-title', j.title));
+    var lateSt = st.filter(stageLate)[0];
+    var sub = lateSt ? 'Late: ' + lateSt.name + ' (due ' + fmtDay(lateSt.due) + ')'
+      : cur && cur.due ? 'Due ' + fmtDay(cur.due) : '';
+    if (sub) main.appendChild(el('div', 'ov-sub' + (lateSt ? ' late' : ''), sub));
+    row.appendChild(main);
+    if (st.length) {
+      var prog = el('div', 'ov-prog');
+      var dots = el('div', 'dots');
+      st.forEach(function (s) {
+        var d = el('span', s.done ? 'done' : s === cur ? 'cur' : null);
+        d.title = s.name;
+        dots.appendChild(d);
+      });
+      prog.appendChild(dots);
+      prog.appendChild(el('div', null, st.filter(function (s) { return s.done; }).length + '/' + st.length));
+      row.appendChild(prog);
+    }
+    row.addEventListener('click', function () { openJob(j.id); });
+    return row;
+  }
+
   // ---------- recycle bin ----------
   // Deleted jobs go to data.bin = [{ job, deletedAt }] whole (notes, stages and
   // all), so they can be put back exactly as they were.

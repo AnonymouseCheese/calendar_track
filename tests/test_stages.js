@@ -37,7 +37,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await clickText('#stageAdd .chip', '+ Quotation');
   await clickText('#stageAdd .chip', '+ Delivery date');
   await clickText('#stageAdd .chip', '+ Printing');
-  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Quotation', 'Printing', 'Delivery date', 'Billing']), 'stages kept in sensible order: ' + await stageNames());
+  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing', 'Quotation']), 'latest stage at the top, first at the bottom: ' + await stageNames());
+  ok(JSON.stringify((await stored()).jobs[0].stages.map(x => x.name)) === JSON.stringify(['Quotation', 'Printing', 'Delivery date', 'Billing']), 'stored in sensible order');
   ok(!(await page.$$eval('#stageAdd .chip', c => c.map(x => x.textContent))).includes('+ Printing'), 'used stages leave the chip list');
   // custom stage
   await clickText('#stageAdd .chip', '+ New stage');
@@ -47,9 +48,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(await page.$eval('#stageAdd', e => e.textContent.trim() === '+ Add a stage'), 'chips fold away into "+ Add a stage"');
 
   // tick the first stage: date stamped, next one highlighted
-  await page.click('#stages .stage .st-dot'); await wait(150);
-  ok(await page.$eval('#stages .stage', s => s.classList.contains('done')), 'tick marks stage done');
-  ok((await page.$eval('#stages .stage .st-sub', e => e.textContent)).startsWith('Done '), 'done date shown');
+  const qRow = () => page.evaluateHandle(() => [...document.querySelectorAll('#stages .stage')].find(r => r.querySelector('.st-name').textContent === 'Quotation'));
+  await page.evaluate(r => r.querySelector('.st-dot').click(), await qRow()); await wait(150);
+  ok(await page.evaluate(r => r.classList.contains('done'), await qRow()), 'tick marks stage done');
+  ok((await page.evaluate(r => r.querySelector('.st-sub').textContent, await qRow())).startsWith('Done '), 'done date shown');
+  ok(await page.evaluate(r => r.classList.contains('last'), await qRow()), 'first stage is at the bottom');
   ok(await page.$eval('#stages .stage.next .st-name', e => e.textContent) === 'Printing', 'next stage highlighted');
   let d = await stored();
   let job = d.jobs[0];
@@ -80,8 +83,11 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // move a stage, remove a stage
   const iProof = (await stageNames()).indexOf('Proof approved');
   await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), iProof); await wait(120);
+  ok(iProof === 0, 'newest custom stage is at the top');
+  await clickText('#stages .st-edit button', 'Move down');
+  ok((await stageNames()).indexOf('Proof approved') === iProof + 1, 'Move down moves it one place lower on screen');
   await clickText('#stages .st-edit button', 'Move up');
-  ok((await stageNames()).indexOf('Proof approved') === iProof - 1, 'stage moved up');
+  ok((await stageNames()).indexOf('Proof approved') === iProof, 'Move up moves it back');
   await clickText('#stages .st-edit button', 'Remove');
   ok(!(await stageNames()).includes('Proof approved'), 'stage removed');
   await page.screenshot({ path: path.join(__dirname, 's6_stages.png'), fullPage: true });
@@ -122,7 +128,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.click('.tabs button[data-tab="active"]'); await wait(100);
   await page.click('#activeList .card'); await wait(150);
   await clickText('#jobActions button', 'Done, and start the next round');
-  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Quotation', 'Printing', 'Delivery date', 'Billing']), 'next round has the same stages');
+  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing', 'Quotation']), 'next round has the same stages');
   ok((await page.$$('#stages .stage.done')).length === 0 && (await page.$$('#stages .st-sub')).length === 0, 'unticked, no dates');
   ok((await page.$$('#stages .st-note')).length === 0, 'stage notes not copied into the next round');
   ok((await page.$eval('#prevLabel', e => e.textContent)) === 'Show previous notes (1)', 'previous notes count includes the stage note');

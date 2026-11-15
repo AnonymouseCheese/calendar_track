@@ -59,7 +59,7 @@ The user's rule: **data must never be wiped when the app is updated.**
 
 1. Bump `?v=N` on **every** asset in `index.html`.
 2. In `sw.js`, bump `CACHE` (`ct-vN`) and the `?v=N` entries in `SHELL` to match.
-3. Run all seven test suites (below). Each must print `ALL PASSED`.
+3. Run all eight test suites (below). Each must print `ALL PASSED`.
 4. Commit and push (DEPLOY.md, Case 1). Pages updates in ~1-2 min, and the
    phone picks it up on the next open while online.
 
@@ -77,6 +77,7 @@ node test_stages.js    # 30 checks: job stages / timeline / calendar link / sett
 node test_bin.js       # 19 checks: recycle bin (undo, restore, delete forever, empty)
 node test_misc.js      # 28 checks: Jobs | Misc switch, separate misc stage list
 node test_lock.js      # 21 checks: password stays valid 4h by default, settings options
+node test_overview.js  # 19 checks: stage overview grouping, late count, open job, misc
 node test_upgrade.js   # 17 checks: ships a fake next version and proves notes survive
 ```
 
@@ -168,6 +169,14 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
       every time / after 1 hour / after 4 hours / once a day (until midnight). Stored in
       `ct.lockMode`, and the end time in `ct.unlockUntil`. The Lock button clears it. Changing
       the setting counts from now. A 60s timer locks the app if it's left open past the end.
+
+- [x] v12 (2026-11-16): the job timeline is drawn latest-first (last stage at the top, first
+      at the bottom). Only the display is reversed; `job.stages` stays first-to-last, and the
+      stage editor's "Move up" means later in the order. New "Stage overview" sheet (button on
+      the Active tab, follows Jobs | Misc) groups active items by their current stage (the
+      first not-done one) in stage-list order, then "All stages done", then "No stages yet".
+      It shows a late count, due/late per row, and progress dots. Tapping a row opens the
+      job on top (`#sheet-job` z-index 25), and coming back refreshes the overview.
 
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code

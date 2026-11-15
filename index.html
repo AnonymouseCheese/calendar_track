@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -115,6 +115,7 @@
         <input id="newJobTitle" placeholder="New job title" enterkeyhint="done" autocomplete="off">
         <button id="newJobGo" class="primary" type="button">Add</button>
       </div>
+      <button id="ovOpen" class="link ov-open" type="button" hidden>Stage overview &rsaquo;</button>
       <div id="activeList" class="list"></div>
       <p id="activeEmpty" class="empty" hidden>No active jobs. Type a title above to add one.</p>
       <p id="dragTip" class="muted tiny drag-tip">Drag a job by the ≡ on either side to change the order.</p>
@@ -251,6 +252,19 @@
   </div>
 </div>
 
+<!-- Overview of active jobs by stage -->
+<div id="sheet-overview" class="sheet" hidden>
+  <div class="sheet-head">
+    <button id="ovBack" class="link" type="button">&lsaquo; Back</button>
+    <span id="ovTitle" class="sheet-title">Overview</span>
+  </div>
+  <div class="sheet-body">
+    <p id="ovLate" class="ov-late" hidden></p>
+    <div id="ovList"></div>
+    <p id="ovEmpty" class="empty" hidden></p>
+  </div>
+</div>
+
 <!-- Recycle bin -->
 <div id="sheet-bin" class="sheet" hidden>
   <div class="sheet-head">
@@ -267,6 +281,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

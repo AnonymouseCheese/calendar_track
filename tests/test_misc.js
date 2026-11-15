@@ -45,7 +45,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await page.type('#stageNewName', 'Pay fee'); await page.keyboard.press('Enter'); await wait(150);
   ok((await page.$$('#stages .stage')).length === 2, 'misc item has its own stages');
   // due date on misc stage -> calendar
-  await page.evaluate(() => document.querySelectorAll('#stages .stage .st-more')[1].click()); await wait(120);
+  await page.evaluate(() => document.querySelectorAll('#stages .stage .st-more')[0].click()); await wait(120);
   await page.$eval('#stages .st-edit input[type="date"]', (e, v) => { e.value = v; e.dispatchEvent(new Event('change')); }, tomorrow); await wait(120);
   await page.click('#jobBack'); await wait(100);
   ok(JSON.stringify(await titles('#activeList')) === JSON.stringify(['Renew business licence']), 'misc list shows only misc');
