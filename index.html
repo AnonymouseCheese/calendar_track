@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -79,7 +79,7 @@
   <main>
     <section id="view-calendar" class="view">
       <div class="mode-bar">
-        <div class="seg">
+        <div class="seg" id="calSeg">
           <button data-mode="month" type="button">Month</button>
           <button data-mode="week" type="button">Week</button>
         </div>
@@ -107,6 +107,10 @@
     </section>
 
     <section id="view-active" class="view" hidden>
+      <div class="seg kind-seg">
+        <button data-kind="job" type="button">Jobs</button>
+        <button data-kind="misc" type="button">Misc</button>
+      </div>
       <div class="add-row">
         <input id="newJobTitle" placeholder="New job title" enterkeyhint="done" autocomplete="off">
         <button id="newJobGo" class="primary" type="button">Add</button>
@@ -117,6 +121,10 @@
     </section>
 
     <section id="view-old" class="view" hidden>
+      <div class="seg kind-seg">
+        <button data-kind="job" type="button">Jobs</button>
+        <button data-kind="misc" type="button">Misc</button>
+      </div>
       <input id="oldSearch" type="search" placeholder="Search old jobs and their notes" autocomplete="off">
       <div id="oldList" class="list"></div>
       <p id="oldEmpty" class="empty" hidden>No old jobs yet. When you mark a job as done, it moves here.</p>
@@ -126,8 +134,8 @@
 
   <nav class="tabs">
     <button data-tab="calendar" class="on" type="button">Calendar</button>
-    <button data-tab="active" type="button">Active jobs</button>
-    <button data-tab="old" type="button">Old jobs</button>
+    <button data-tab="active" type="button">Active</button>
+    <button data-tab="old" type="button">Old</button>
   </nav>
 </div>
 
@@ -216,6 +224,14 @@
       <button id="libAdd" class="primary" type="button">Add</button>
     </div>
 
+    <h3>Misc stages</h3>
+    <p class="muted tiny">The stages you can pick from on misc items (things that aren't jobs).</p>
+    <div id="miscLibList"></div>
+    <div class="add-row">
+      <input id="miscLibNew" placeholder="New stage name" autocomplete="off">
+      <button id="miscLibAdd" class="primary" type="button">Add</button>
+    </div>
+
     <h3>Recycle bin</h3>
     <p class="muted tiny">Deleted jobs are kept here, with all their notes, until you delete them forever.</p>
     <button id="binOpen2" class="wide" type="button">Open the recycle bin</button>
@@ -241,6 +257,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

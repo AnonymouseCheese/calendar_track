@@ -59,7 +59,7 @@ The user's rule: **data must never be wiped when the app is updated.**
 
 1. Bump `?v=N` on **every** asset in `index.html`.
 2. In `sw.js`, bump `CACHE` (`ct-vN`) and the `?v=N` entries in `SHELL` to match.
-3. Run all five test suites (below). Each must print `ALL PASSED`.
+3. Run all six test suites (below). Each must print `ALL PASSED`.
 4. Commit and push (DEPLOY.md, Case 1). Pages updates in ~1-2 min, and the
    phone picks it up on the next open while online.
 
@@ -75,6 +75,7 @@ node test.js           # 103 feature checks, drives real Edge at iPhone size
 node test_drag.js      # 12 checks: drag-to-reorder Active jobs with a real mouse
 node test_stages.js    # 30 checks: job stages / timeline / calendar link / settings list
 node test_bin.js       # 19 checks: recycle bin (undo, restore, delete forever, empty)
+node test_misc.js      # 28 checks: Jobs | Misc switch, separate misc stage list
 node test_upgrade.js   # 17 checks: ships a fake next version and proves notes survive
 ```
 
@@ -150,6 +151,13 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
       Job cleaning is shared in `normJob()`. Stage due dates always show the date
       (never "Due today"). Stages have a free-text `note` (Edit > Notes), shown under
       the stage; earlier rounds' stage notes appear under "Show previous notes".
+
+- [x] v9: Misc items, for things that aren't jobs but may need stages. A Jobs | Misc switch
+      (`.kind-seg`, remembered in `ct.listKind`) sits on both the Active and Old tabs. A misc
+      item is a job with `kind: 'misc'`, so notes, stages, calendar, drag order, done and the
+      bin all work the same. Misc has its own stage list `data.miscStageLib` (starts empty;
+      typed names are remembered), and Settings shows both lists. The calendar Month|Week
+      switch is now `#calSeg`. The bottom tabs are renamed "Active" / "Old".
 
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code

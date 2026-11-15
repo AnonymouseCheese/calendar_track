@@ -82,14 +82,16 @@
   function normalise(d) {
     if (!d || typeof d !== 'object') throw new Error('not data');
     var out = Object.assign({}, d, emptyData());
-    if (Array.isArray(d.stageLib)) {
-      out.stageLib = [];
-      d.stageLib.forEach(function (n) {
-        if (typeof n === 'string' && n.trim() && out.stageLib.indexOf(n.trim()) < 0) out.stageLib.push(n.trim());
-      });
-    } else {
-      delete out.stageLib;
-    }
+    ['stageLib', 'miscStageLib'].forEach(function (key) {
+      if (Array.isArray(d[key])) {
+        out[key] = [];
+        d[key].forEach(function (n) {
+          if (typeof n === 'string' && n.trim() && out[key].indexOf(n.trim()) < 0) out[key].push(n.trim());
+        });
+      } else {
+        delete out[key];
+      }
+    });
     if (d.days && typeof d.days === 'object') {
       Object.keys(d.days).forEach(function (k) {
         var v = d.days[k];
@@ -120,6 +122,7 @@
     return Object.assign({}, j, {
       id: id,
       title: str(j.title) || 'Untitled job',
+      kind: j.kind === 'misc' ? 'misc' : undefined,
       seriesId: str(j.seriesId) || id,
       status: j.status === 'old' ? 'old' : 'active',
       created: str(j.created) || nowIso(),
@@ -414,6 +417,16 @@
   // ---------- tabs ----------
   var tab = 'calendar';
   var TITLES = { calendar: 'Calendar', active: 'Active jobs', old: 'Old jobs' };
+  // Active and Old each have a Jobs | Misc switch. Misc items work like jobs.
+  var listKind = localStorage.getItem('ct.listKind') === 'misc' ? 'misc' : 'job';
+  function ofKind(j) { return (j.kind === 'misc' ? 'misc' : 'job') === listKind; }
+  function kindWords() {
+    return listKind === 'misc'
+      ? { active: 'Active misc', old: 'Old misc', add: 'New misc item', none: 'No misc items. Type a name above to add one, e.g. "Renew licence".',
+        noneOld: 'No old misc items yet. When you mark one as done, it moves here.', search: 'Search old misc items and notes' }
+      : { active: 'Active jobs', old: 'Old jobs', add: 'New job title', none: 'No active jobs. Type a title above to add one.',
+        noneOld: 'No old jobs yet. When you mark a job as done, it moves here.', search: 'Search old jobs and their notes' };
+  }
   function showTab(t) {
     flushAll();
     tab = t;
@@ -421,7 +434,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) {
       b.classList.toggle('on', b.dataset.tab === t);
     });
-    $('viewTitle').textContent = TITLES[t];
+    $('viewTitle').textContent = t === 'calendar' ? TITLES[t] : kindWords()[t];
     renderTab();
     window.scrollTo(0, 0);
   }
@@ -429,6 +442,7 @@
     if (tab === 'calendar') renderCal();
     else if (tab === 'active') renderActive();
     else renderOld();
+    if (tab !== 'calendar') renderKindBar();
   }
   Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) {
     b.addEventListener('click', function () { showTab(b.dataset.tab); });
@@ -561,7 +575,7 @@
   function renderCal() {
     parkPanel();
     var isWeek = calMode === 'week';
-    Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+    Array.prototype.forEach.call(document.querySelectorAll('#calSeg button'), function (b) {
       b.classList.toggle('on', b.dataset.mode === calMode);
     });
     $('weekdays').hidden = isWeek;
@@ -744,7 +758,7 @@
     else if (e.target.closest('.wk-head')) closeDay(); // tap the open day's heading to close it
   });
 
-  Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll('#calSeg button'), function (b) {
     b.addEventListener('click', function () {
       if (calMode === b.dataset.mode) return;
       commitDay();
@@ -795,9 +809,10 @@
     var n = latestNote(j);
     return n && n.at > j.created ? n.at : j.created;
   }
-  function newJob(title, seriesId) {
+  function newJob(title, seriesId, kind) {
     var id = uid();
     var j = { id: id, title: title, seriesId: seriesId || id, status: 'active', created: nowIso(), closed: null, notes: [] };
+    if (kind === 'misc') j.kind = 'misc';
     data.jobs.push(j);
     return j;
   }
@@ -828,7 +843,7 @@
   // Active jobs are in the user's own order (job.rank, 0 = top), set by dragging.
   // Jobs without a rank yet (new ones) go to the top.
   function activeInOrder() {
-    var jobs = data.jobs.filter(function (j) { return j.status === 'active'; });
+    var jobs = data.jobs.filter(function (j) { return j.status === 'active' && ofKind(j); });
     var unranked = jobs.filter(function (j) { return typeof j.rank !== 'number'; })
       .sort(function (a, b) { return lastActivity(a) < lastActivity(b) ? 1 : -1; });
     var ranked = jobs.filter(function (j) { return typeof j.rank === 'number'; })
@@ -840,6 +855,23 @@
     jobs.forEach(function (j, i) { if (j.rank !== i) { j.rank = i; changed = true; } });
     return changed;
   }
+
+  function renderKindBar() {
+    Array.prototype.forEach.call(document.querySelectorAll('.kind-seg button'), function (b) {
+      b.classList.toggle('on', b.dataset.kind === listKind);
+    });
+    $('newJobTitle').placeholder = kindWords().add;
+    $('oldSearch').placeholder = kindWords().search;
+    $('viewTitle').textContent = kindWords()[tab] || $('viewTitle').textContent;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.kind-seg button'), function (b) {
+    b.addEventListener('click', function () {
+      if (listKind === b.dataset.kind) return;
+      listKind = b.dataset.kind;
+      localStorage.setItem('ct.listKind', listKind);
+      renderTab();
+    });
+  });
 
   function renderActive() {
     var list = $('activeList');
@@ -855,6 +887,7 @@
       list.appendChild(row);
     });
     $('activeEmpty').hidden = jobs.length > 0;
+    $('activeEmpty').textContent = kindWords().none;
     $('dragTip').hidden = jobs.length < 2;
   }
 
@@ -915,7 +948,7 @@
     var list = $('oldList');
     list.textContent = '';
     var q = $('oldSearch').value.trim().toLowerCase();
-    var all = data.jobs.filter(function (j) { return j.status === 'old'; });
+    var all = data.jobs.filter(function (j) { return j.status === 'old' && ofKind(j); });
     var jobs = all.filter(function (j) {
       if (!q) return true;
       if (j.title.toLowerCase().indexOf(q) >= 0) return true;
@@ -949,7 +982,7 @@
     });
     var empty = $('oldEmpty');
     empty.hidden = jobs.length > 0;
-    empty.textContent = all.length ? 'No old jobs match that search.' : 'No old jobs yet. When you mark a job as done, it moves here.';
+    empty.textContent = all.length ? 'Nothing matches that search.' : kindWords().noneOld;
     var nBin = (data.bin || []).length;
     $('binOpen').hidden = !nBin;
     $('binOpen').textContent = 'Recycle bin (' + nBin + ')';
@@ -959,7 +992,7 @@
   function addJobFromInput() {
     var t = $('newJobTitle').value.trim();
     if (!t) return;
-    var j = newJob(t);
+    var j = newJob(t, null, listKind);
     if (!save()) return;
     $('newJobTitle').value = '';
     $('newJobTitle').blur();
@@ -980,9 +1013,16 @@
   var stageUi = { addOpen: false, newOpen: false, editId: null };
 
   function isDay(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v); }
-  function stageLib() { return Array.isArray(data.stageLib) ? data.stageLib : DEFAULT_STAGES.slice(); }
-  function libIndex(name) {
-    var lib = stageLib(), n = name.toLowerCase();
+  function libKey(kind) { return kind === 'misc' ? 'miscStageLib' : 'stageLib'; }
+  // Jobs start with the usual print stages; misc items start with none and
+  // remember the names typed on them.
+  function stageLib(kind) {
+    var l = data[libKey(kind)];
+    return Array.isArray(l) ? l : (kind === 'misc' ? [] : DEFAULT_STAGES.slice());
+  }
+  function setLib(kind, list) { data[libKey(kind)] = list; }
+  function libIndex(name, kind) {
+    var lib = stageLib(kind), n = name.toLowerCase();
     for (var i = 0; i < lib.length; i++) if (lib[i].toLowerCase() === n) return i;
     return -1;
   }
@@ -998,15 +1038,15 @@
     j.stages = j.stages || [];
     var n = name.toLowerCase();
     if (j.stages.some(function (s) { return s.name.toLowerCase() === n; })) return;
-    var li = libIndex(name);
+    var li = libIndex(name, j.kind);
     if (li < 0) {
-      data.stageLib = stageLib().concat([name]); // remember new names for next time
-      li = data.stageLib.length - 1;
+      setLib(j.kind, stageLib(j.kind).concat([name])); // remember new names for next time
+      li = stageLib(j.kind).length - 1;
     }
     // Keep stages in list order, whatever order they were tapped in.
     var pos = j.stages.length;
     for (var i = 0; i < j.stages.length; i++) {
-      if (libIndex(j.stages[i].name) > li) { pos = i; break; }
+      if (libIndex(j.stages[i].name, j.kind) > li) { pos = i; break; }
     }
     j.stages.splice(pos, 0, { id: uid(), name: name, done: false, doneAt: null, due: null });
   }
@@ -1074,7 +1114,7 @@
     if (!stages.length) add.appendChild(el('div', 'muted tiny', 'Tap the stages this job needs. You can add or remove them any time.'));
     var have = stages.map(function (s) { return s.name.toLowerCase(); });
     var chips = el('div', 'chips');
-    stageLib().forEach(function (n) {
+    stageLib(j.kind).forEach(function (n) {
       if (have.indexOf(n.toLowerCase()) >= 0) return;
       chips.appendChild(btn('+ ' + n, 'chip', function () {
         stageUi.addOpen = true; // keep the chips open to add several
@@ -1180,24 +1220,26 @@
     return ed;
   }
 
-  // Stage names list in settings
-  function renderLib() {
-    var box = $('libList');
+  // Stage names lists in settings: one for jobs, one for misc items.
+  function renderLib() { renderLibFor('job'); renderLibFor('misc'); }
+  function libIds(kind) { return kind === 'misc' ? { list: 'miscLibList', input: 'miscLibNew' } : { list: 'libList', input: 'libNew' }; }
+  function renderLibFor(kind) {
+    var box = $(libIds(kind).list);
     box.textContent = '';
-    var lib = stageLib();
+    var lib = stageLib(kind);
     lib.forEach(function (n, i) {
       var row = el('div', 'lib-row');
       row.appendChild(el('span', null, n));
-      var up = btn('↑', 'small', function () { libMove(i, -1); });
+      var up = btn('↑', 'small', function () { libMove(kind, i, -1); });
       up.disabled = i === 0;
       up.setAttribute('aria-label', 'Move ' + n + ' up');
-      var down = btn('↓', 'small', function () { libMove(i, 1); });
+      var down = btn('↓', 'small', function () { libMove(kind, i, 1); });
       down.disabled = i === lib.length - 1;
       down.setAttribute('aria-label', 'Move ' + n + ' down');
       var del = btn('×', 'small danger', function () {
-        data.stageLib = stageLib().filter(function (x) { return x !== n; });
+        setLib(kind, stageLib(kind).filter(function (x) { return x !== n; }));
         save();
-        renderLib();
+        renderLibFor(kind);
       });
       del.setAttribute('aria-label', 'Remove ' + n);
       row.appendChild(up);
@@ -1205,26 +1247,33 @@
       row.appendChild(del);
       box.appendChild(row);
     });
-    if (!lib.length) box.appendChild(el('p', 'muted tiny', 'No stage names. Add some below.'));
+    if (!lib.length) {
+      box.appendChild(el('p', 'muted tiny', kind === 'misc'
+        ? 'None yet. Stage names you type on misc items are added here.'
+        : 'No stage names. Add some below.'));
+    }
   }
-  function libMove(i, delta) {
-    var lib = stageLib().slice(), k = i + delta;
+  function libMove(kind, i, delta) {
+    var lib = stageLib(kind).slice(), k = i + delta;
     if (k < 0 || k >= lib.length) return;
     lib.splice(k, 0, lib.splice(i, 1)[0]);
-    data.stageLib = lib;
+    setLib(kind, lib);
     save();
-    renderLib();
+    renderLibFor(kind);
   }
-  function libAdd() {
-    var v = $('libNew').value.trim();
-    if (!v || libIndex(v) >= 0) { $('libNew').value = ''; return; }
-    data.stageLib = stageLib().concat([v]);
-    $('libNew').value = '';
+  function libAdd(kind) {
+    var inp = $(libIds(kind).input), v = inp.value.trim();
+    inp.value = '';
+    if (!v || libIndex(v, kind) >= 0) return;
+    setLib(kind, stageLib(kind).concat([v]));
     save();
-    renderLib();
+    renderLibFor(kind);
   }
-  $('libAdd').addEventListener('click', libAdd);
-  $('libNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') libAdd(); });
+  $('libAdd').addEventListener('click', function () { libAdd('job'); });
+  $('libNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') libAdd('job'); });
+  $('miscLibAdd').addEventListener('click', function () { libAdd('misc'); });
+  $('miscLibNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') libAdd('misc'); });
+
 
   // ---------- job detail ----------
   var openId = null;
@@ -1398,7 +1447,7 @@
     j.status = 'old';
     j.closed = nowIso();
     if (!j.month) j.month = monthKey(new Date());
-    var next = repeat ? newJob(j.title, j.seriesId) : null;
+    var next = repeat ? newJob(j.title, j.seriesId, j.kind) : null;
     if (next && j.stages) next.stages = copyStages(j);
     if (next && typeof j.rank === 'number') next.rank = j.rank;
     save();
@@ -1406,7 +1455,7 @@
     else { closeJob(); toast('Moved to Old jobs'); }
   }
   function startRound(j) {
-    var next = newJob(j.title, j.seriesId);
+    var next = newJob(j.title, j.seriesId, j.kind);
     if (j.stages) next.stages = copyStages(j);
     save();
     showTab('active');
@@ -1431,6 +1480,9 @@
     closeJob();
     toast('Moved to the recycle bin', function () { restoreJob(j.id); });
   }
+  function placeName(j) {
+    return (j.status === 'old' ? 'Old ' : 'Active ') + (j.kind === 'misc' ? 'misc' : 'jobs');
+  }
   function restoreJob(id) {
     var b = (data.bin || []).filter(function (x) { return x.job.id === id; })[0];
     if (!b) return;
@@ -1440,7 +1492,7 @@
     if (!save()) return;
     if (!$('sheet-bin').hidden) renderBin();
     renderTab();
-    toast('Restored to ' + (b.job.status === 'old' ? 'Old jobs' : 'Active jobs'));
+    toast('Restored to ' + placeName(b.job));
   }
   function renderBin() {
     var list = $('binList');
@@ -1450,7 +1502,7 @@
       var j = b.job;
       var card = el('div', 'bin-card');
       card.appendChild(el('div', 'card-title', j.title));
-      var parts = ['Was in ' + (j.status === 'old' ? 'Old jobs' : 'Active jobs'), 'deleted ' + fmtDate(b.deletedAt),
+      var parts = ['Was in ' + placeName(j), 'deleted ' + fmtDate(b.deletedAt),
         plural(j.notes.length, 'note')];
       if (j.stages && j.stages.length) parts.push(plural(j.stages.length, 'stage'));
       card.appendChild(el('div', 'card-meta', parts.join(' · ')));

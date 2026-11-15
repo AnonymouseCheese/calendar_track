@@ -382,3 +382,8 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .bin-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .bin-btns { display: flex; gap: 8px; margin-top: 10px; }
 #binEmptyAll { margin-top: 20px; }
+
+/* ---------- Jobs | Misc switch ---------- */
+.kind-seg { display: flex; margin-bottom: 12px; }
+.kind-seg button { flex: 1; padding: 8px 0; }
+#miscLibList + .add-row { margin-top: 10px; }
