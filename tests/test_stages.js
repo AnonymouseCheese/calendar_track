@@ -33,12 +33,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const chips = await page.$$eval('#stageAdd .chip', c => c.map(x => x.textContent));
   ok(chips.length === 9 && chips[0] === '+ Quotation' && chips[8] === '+ New stage', 'chips: 8 suggestions + New stage');
   // tap out of order: they still line up in the list order
-  await clickText('#stageAdd .chip', '+ Billing');
   await clickText('#stageAdd .chip', '+ Quotation');
-  await clickText('#stageAdd .chip', '+ Delivery date');
   await clickText('#stageAdd .chip', '+ Printing');
-  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing', 'Quotation']), 'latest stage at the top, first at the bottom: ' + await stageNames());
-  ok(JSON.stringify((await stored()).jobs[0].stages.map(x => x.name)) === JSON.stringify(['Quotation', 'Printing', 'Delivery date', 'Billing']), 'stored in sensible order');
+  ok((await stageNames())[0] === 'Printing', 'a newly added stage goes on top');
+  await clickText('#stageAdd .chip', '+ Delivery date');
+  await clickText('#stageAdd .chip', '+ Billing');
+  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing', 'Quotation']), 'each new stage on top, first at the bottom: ' + await stageNames());
+  ok(JSON.stringify((await stored()).jobs[0].stages.map(x => x.name)) === JSON.stringify(['Quotation', 'Printing', 'Delivery date', 'Billing']), 'stored first-to-last');
   const chips2 = await page.$$eval('#stageAdd .chip', c => c.map(x => x.textContent));
   ok(chips2.includes('+ Printing again') && !chips2.includes('+ Printing'), 'used stages stay as "+ Printing again"');
   // custom stage
@@ -65,6 +66,32 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), i); await wait(120);
     await page.$eval('#stages .st-edit input[type="date"]', (e, v) => { e.value = v; e.dispatchEvent(new Event('change')); }, val); await wait(120);
     await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), i); await wait(120);
+  }
+  // iPhone fills in a date as soon as the box is tapped: the picker must stay open
+  {
+    const i = (await stageNames()).indexOf('Delivery date');
+    await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), i); await wait(120);
+    const box = await page.$('#stages .st-edit input[type="date"]');
+    await box.evaluate((e, v) => { e.value = v; e.dispatchEvent(new Event('change')); }, today); await wait(120);
+    ok(await box.evaluate(e => e.isConnected), 'date box stays open after a date is filled in');
+    ok((await stored()).jobs[0].stages.find(s => s.name === 'Delivery date').due === today, 'first date saved');
+    await box.evaluate((e, v) => { e.value = v; e.dispatchEvent(new Event('change')); }, yesterday); await wait(120);
+    ok(await box.evaluate(e => e.isConnected), 'can pick another date without reopening');
+    ok((await stored()).jobs[0].stages.find(s => s.name === 'Delivery date').due === yesterday, 'second date saved');
+    const subTxt = await page.evaluate(() => [...document.querySelectorAll('#stages .stage')].find(r => r.querySelector('.st-name').textContent === 'Delivery date').querySelector('.st-sub'));
+    ok(subTxt !== null, 'date line updates while the box is open');
+    await page.evaluate(() => [...document.querySelectorAll('#stages .st-edit .date-clear')][0].click()); await wait(120);
+    ok((await stored()).jobs[0].stages.find(s => s.name === 'Delivery date').due === null && await box.evaluate(e => e.value === ''), 'Clear removes the date');
+    await page.evaluate(n => document.querySelectorAll('#stages .stage .st-more')[n].click(), i); await wait(120);
+  }
+  // same for the job's Month box
+  {
+    const m = await page.$('#jobMonth');
+    await m.evaluate(e => { e.value = '2026-12'; e.dispatchEvent(new Event('change')); }); await wait(120);
+    ok(await m.evaluate(e => e.isConnected && e.value === '2026-12'), 'month box stays put after picking');
+    ok((await stored()).jobs[0].month === '2026-12' && (await page.$eval('#monthHint', e => e.textContent)).includes('December 2026'), 'month saved, hint updated');
+    await page.click('#monthClear'); await wait(120);
+    ok(!(await stored()).jobs[0].month && (await page.$eval('#jobMonth', e => e.value)) === '', 'month Clear works');
   }
   await setDue('Delivery date', tomorrow);
   await setDue('Printing', yesterday);
@@ -94,7 +121,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // the same stage twice (e.g. a reprint)
   await clickText('#stageAdd button', '+ Add a stage');
   await clickText('#stageAdd .chip', '+ Printing again');
-  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Billing', 'Delivery date', 'Printing (2nd time)', 'Printing', 'Quotation']), 'same stage added again, right after the first: ' + await stageNames());
+  ok(JSON.stringify(await stageNames()) === JSON.stringify(['Printing (2nd time)', 'Billing', 'Delivery date', 'Printing', 'Quotation']), 'same stage added again, on top: ' + await stageNames());
   ok((await stored()).jobs[0].stages.filter(s => s.name === 'Printing').length === 2, 'both saved with the same name');
   await clickText('#stageAdd .chip', '+ New stage');
   await page.type('#stageNewName', 'printing'); await page.keyboard.press('Enter'); await wait(150);

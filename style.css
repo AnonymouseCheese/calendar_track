@@ -419,3 +419,8 @@ main { padding: 12px 14px calc(84px + env(safe-area-inset-bottom)); }
 .dots span.cur { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
 .chip.used { color: var(--muted); border-style: dashed; }
+
+/* date boxes with a Clear button */
+.date-row { display: flex; align-items: center; gap: 6px; }
+.date-row label { flex: 1; min-width: 0; }
+.date-clear { flex: none; padding: 4px 6px; font-size: 14px; }

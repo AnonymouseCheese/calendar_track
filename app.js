@@ -1095,17 +1095,12 @@
     name = name.trim();
     if (!name) return;
     j.stages = j.stages || [];
-    var li = libIndex(name, j.kind);
-    if (li < 0) {
+    if (libIndex(name, j.kind) < 0) {
       setLib(j.kind, stageLib(j.kind).concat([name])); // remember new names for next time
-      li = stageLib(j.kind).length - 1;
     }
-    // Keep stages in list order, whatever order they were tapped in.
-    var pos = j.stages.length;
-    for (var i = 0; i < j.stages.length; i++) {
-      if (libIndex(j.stages[i].name, j.kind) > li) { pos = i; break; }
-    }
-    j.stages.splice(pos, 0, { id: uid(), name: name, done: false, doneAt: null, due: null });
+    // A new stage always goes on top (the end of the list; the timeline is drawn
+    // latest-first). Move up / Move down rearranges.
+    j.stages.push({ id: uid(), name: name, done: false, doneAt: null, due: null });
   }
   function toggleStage(st) {
     st.done = !st.done;
@@ -1147,9 +1142,8 @@
       dot.setAttribute('aria-label', (st.done ? 'Untick ' : 'Tick ') + st.name);
       var main = el('div', 'st-main');
       main.appendChild(el('div', 'st-name', stageLabel(j, st)));
-      var sub = st.done ? (st.doneAt ? 'Done ' + fmtDay(st.doneAt) : 'Done')
-        : st.due ? 'Due ' + fmtDay(st.due) : '';
-      if (sub) main.appendChild(el('div', 'st-sub' + (stageLate(st) ? ' late' : ''), sub));
+      var sub = stageSubEl(st);
+      if (sub) main.appendChild(sub);
       if (st.note && st.note.trim()) main.appendChild(el('div', 'st-note', st.note));
       var more = btn(stageUi.editId === st.id ? 'Close' : 'Edit', 'link st-more', function () {
         stageUi.editId = stageUi.editId === st.id ? null : st.id;
@@ -1212,13 +1206,45 @@
     }
   }
 
+  function stageSubEl(st) {
+    var text = st.done ? (st.doneAt ? 'Done ' + fmtDay(st.doneAt) : 'Done')
+      : st.due ? 'Due ' + fmtDay(st.due) : '';
+    return text ? el('div', 'st-sub' + (stageLate(st) ? ' late' : ''), text) : null;
+  }
+  // Update just the date line of one stage. Redrawing the whole job screen here
+  // would close the iPhone date picker while it is still being used.
+  function refreshStageSub(st) {
+    var main = $('stages').querySelector('.stage[data-id="' + st.id + '"] .st-main');
+    if (!main) return;
+    var old = main.querySelector('.st-sub');
+    if (old) old.remove();
+    var sub = stageSubEl(st);
+    if (sub) main.insertBefore(sub, main.querySelector('.st-name').nextSibling);
+  }
+  // A date box with a Clear button (iPhone fills in today as soon as it's tapped).
+  function dateField(field, label, value, onSet) {
+    var inp = el('input');
+    inp.type = 'date';
+    inp.value = value || '';
+    field(label, inp);
+    var clear = btn('Clear', 'link date-clear', function (e) {
+      e.preventDefault();
+      inp.value = '';
+      onSet(null);
+    });
+    inp.parentNode.parentNode.appendChild(clear); // label -> its row
+    inp.addEventListener('change', function () { onSet(isDay(inp.value) ? inp.value : null); });
+    return inp;
+  }
   function stageEditor(j, st, i) {
     var ed = el('div', 'st-edit');
     function field(label, input) {
       var l = el('label');
       l.appendChild(el('span', null, label));
       l.appendChild(input);
-      ed.appendChild(l);
+      var row = el('div', 'date-row');
+      row.appendChild(l);
+      ed.appendChild(row);
       return input;
     }
     var name = el('input');
@@ -1229,22 +1255,16 @@
       if (v) { st.name = v; save(); }
       renderJob();
     });
-    var due = el('input');
-    due.type = 'date';
-    due.value = st.due || '';
-    field('Due date', due).addEventListener('change', function () {
-      st.due = isDay(due.value) ? due.value : null;
+    dateField(field, 'Due date', st.due, function (v) {
+      st.due = v;
       save();
-      renderJob();
+      refreshStageSub(st);
     });
     if (st.done) {
-      var doneAt = el('input');
-      doneAt.type = 'date';
-      doneAt.value = st.doneAt || '';
-      field('Done on', doneAt).addEventListener('change', function () {
-        st.doneAt = isDay(doneAt.value) ? doneAt.value : null;
+      dateField(field, 'Done on', st.doneAt, function (v) {
+        st.doneAt = v;
         save();
-        renderJob();
+        refreshStageSub(st);
       });
     }
     var note = el('textarea');
@@ -1386,11 +1406,7 @@
     $('jobMeta').textContent = meta.join(' · ');
 
     $('jobMonth').value = isOld ? jobMonth(j) : (j.month || '');
-    $('monthHint').textContent = isOld
-      ? 'This ' + wordsFor(j).thing + ' is listed under ' + monthLabel(jobMonth(j)) + ' in ' + wordsFor(j).old + '.'
-      : j.month
-        ? 'When done, it will be listed under ' + monthLabel(j.month) + ' in ' + wordsFor(j).old + '.'
-        : 'Optional. When done, it will be listed under the month you finish it, unless you pick a month here.';
+    monthHint(j);
     renderStages(j);
 
     // Notes from the other rounds of a recurring job.
@@ -1493,6 +1509,16 @@
   });
   $('prevToggle').addEventListener('change', renderJob);
 
+  function monthHint(j) {
+    var isOld = j.status === 'old';
+    $('monthHint').textContent = isOld
+      ? 'This ' + wordsFor(j).thing + ' is listed under ' + monthLabel(jobMonth(j)) + ' in ' + wordsFor(j).old + '.'
+      : j.month
+        ? 'When done, it will be listed under ' + monthLabel(j.month) + ' in ' + wordsFor(j).old + '.'
+        : 'Optional. When done, it will be listed under the month you finish it, unless you pick a month here.';
+    $('monthClear').hidden = !j.month;
+  }
+  // Save and update the hint only - redrawing would close the iPhone picker.
   $('jobMonth').addEventListener('change', function () {
     var j = jobById(openId);
     if (!j) return;
@@ -1500,7 +1526,16 @@
     if (/^\d{4}-\d{2}$/.test(v)) j.month = v;
     else delete j.month;
     save();
-    renderJob();
+    monthHint(j);
+  });
+  $('monthClear').addEventListener('click', function (e) {
+    e.preventDefault();
+    var j = jobById(openId);
+    if (!j) return;
+    delete j.month;
+    save();
+    $('jobMonth').value = j.status === 'old' ? jobMonth(j) : '';
+    monthHint(j);
   });
 
   function finishJob(j, repeat) {

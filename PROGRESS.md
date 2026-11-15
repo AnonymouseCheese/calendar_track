@@ -133,8 +133,8 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
         to DEFAULT_STAGES in app.js) to add only the stages it needs. "+ New stage"
         adds a one-off name, which is remembered as a chip. Chips stay open until
         "Done adding".
-      - Stages are kept in list order whatever order they're tapped in. Each stage can
-        be moved up/down, renamed or removed via its Edit button.
+      - (Changed in v15: new stages go on top.) Each stage can be moved up/down,
+        renamed or removed via its Edit button.
       - Tap the circle to tick, which stamps `doneAt` = today (editable). Optional `due`
         date, red when late.
       - The Active job card shows "Next: X (due ..) · n/m" or "Late: ..." plus a progress bar.
@@ -182,6 +182,15 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
       reprint). The user tried and it silently did nothing. Chips stay visible; used ones read
       "+ X again". A repeat goes right after the earlier one and is shown as "X (2nd time)"
       (`stageLabel()`) in the timeline, calendar, card and overview.
+
+- [x] v14: iPhone date/month boxes fill in today the moment they're tapped, which fired
+      'change' -> full renderJob() -> the picker was destroyed (closed). Date changes now save
+      and refresh only that stage's date line (`refreshStageSub`), and the Month box updates
+      only its hint. Each date has a Clear button. NEVER call renderJob() from a date/month
+      input's change handler.
+- [x] v15: a new stage (chip, New stage, or repeat) always goes ON TOP (pushed to the end of
+      `job.stages`; the timeline is drawn latest-first). The earlier "slot into list order"
+      rule looked random to the user, so it was dropped.
 
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code
