@@ -74,6 +74,14 @@
   function normalise(d) {
     if (!d || typeof d !== 'object') throw new Error('not data');
     var out = Object.assign({}, d, emptyData());
+    if (Array.isArray(d.stageLib)) {
+      out.stageLib = [];
+      d.stageLib.forEach(function (n) {
+        if (typeof n === 'string' && n.trim() && out.stageLib.indexOf(n.trim()) < 0) out.stageLib.push(n.trim());
+      });
+    } else {
+      delete out.stageLib;
+    }
     if (d.days && typeof d.days === 'object') {
       Object.keys(d.days).forEach(function (k) {
         var v = d.days[k];
@@ -93,6 +101,16 @@
           closed: j.status === 'old' ? (str(j.closed) || nowIso()) : null,
           month: /^\d{4}-\d{2}$/.test(str(j.month)) ? j.month : undefined,
           rank: typeof j.rank === 'number' && isFinite(j.rank) ? j.rank : undefined,
+          stages: Array.isArray(j.stages) ? j.stages.filter(function (st) {
+            return st && typeof st.name === 'string' && st.name.trim();
+          }).map(function (st) {
+            var day = /^\d{4}-\d{2}-\d{2}$/;
+            return Object.assign({}, st, {
+              id: str(st.id) || uid(), name: st.name.trim(), done: !!st.done,
+              doneAt: st.done && day.test(str(st.doneAt)) ? st.doneAt : null,
+              due: day.test(str(st.due)) ? st.due : null
+            });
+          }) : undefined,
           notes: (Array.isArray(j.notes) ? j.notes : []).filter(function (n) {
             return n && typeof n.text === 'string';
           }).map(function (n) {
@@ -430,10 +448,45 @@
     if (!save()) return;
     renderCal();
   }
-  function checklist(k) {
-    var items = dayItemsOf(k);
-    if (!items.length) return el('div', 'wk-empty', 'Nothing');
+  // Job stages due on a day (active jobs only) show up on the calendar too.
+  function stageItemsOn(k) {
+    var out = [];
+    data.jobs.forEach(function (j) {
+      if (j.status !== 'active' || !j.stages) return;
+      j.stages.forEach(function (st) { if (st.due === k) out.push({ job: j, st: st }); });
+    });
+    return out;
+  }
+  function allItemsOf(k) {
+    return dayItemsOf(k).concat(stageItemsOn(k).map(function (s) {
+      return { done: s.st.done, text: s.job.title + ': ' + s.st.name };
+    }));
+  }
+  function toggleStageFromCal(jobId, stId) {
+    commitDay();
+    var j = jobById(jobId);
+    var st = j && (j.stages || []).filter(function (s) { return s.id === stId; })[0];
+    if (!st) return;
+    toggleStage(st);
+    if (!save()) return;
+    renderCal();
+  }
+  function checklist(k, onlyStages) {
+    var items = onlyStages ? [] : dayItemsOf(k);
+    var stages = stageItemsOn(k);
+    if (!items.length && !stages.length) return onlyStages ? null : el('div', 'wk-empty', 'Nothing');
     var ul = el('ul', 'checks');
+    stages.forEach(function (s) {
+      var li = el('li', 'check jobstage' + (s.st.done ? ' done' : ''));
+      li.dataset.kind = 'stage';
+      li.dataset.job = s.job.id;
+      li.dataset.stage = s.st.id;
+      li.setAttribute('role', 'checkbox');
+      li.setAttribute('aria-checked', s.st.done ? 'true' : 'false');
+      li.appendChild(el('span', 'box'));
+      li.appendChild(el('span', 'txt', s.job.title + ': ' + s.st.name));
+      ul.appendChild(li);
+    });
     items.forEach(function (it) {
       var li = el('li', 'check' + (it.done ? ' done' : ''));
       li.dataset.key = k;
@@ -447,7 +500,7 @@
     return ul;
   }
   function leftLabel(k) {
-    var items = dayItemsOf(k);
+    var items = allItemsOf(k);
     if (!items.length) return null;
     var left = items.filter(function (it) { return !it.done; }).length;
     return left ? el('span', 'left', left + ' left') : el('span', 'left all', 'All done');
@@ -457,7 +510,8 @@
     var li = e.target.closest && e.target.closest('.check');
     if (!li || !unlocked) return;
     e.stopPropagation();
-    toggleItem(li.dataset.key, +li.dataset.idx);
+    if (li.dataset.kind === 'stage') toggleStageFromCal(li.dataset.job, li.dataset.stage);
+    else toggleItem(li.dataset.key, +li.dataset.idx);
   }, true);
 
   function renderCal() {
@@ -538,7 +592,7 @@
   // A month box shows the first item still to do (+N for more), or turns green when all are done.
   function fillCell(b, k) {
     Array.prototype.forEach.call(b.querySelectorAll('.snip, .more'), function (x) { x.remove(); });
-    var items = dayItemsOf(k);
+    var items = allItemsOf(k);
     var todo = items.filter(function (it) { return !it.done; });
     b.classList.toggle('has', todo.length > 0);
     b.classList.toggle('alldone', items.length > 0 && !todo.length);
@@ -565,9 +619,11 @@
     var typing = isWeek || editing || !has;
     $('dayNote').hidden = !typing;
     $('dayTip').hidden = !typing;
-    $('dayChecks').hidden = typing;
+    // While typing, still show that day's job stages (they aren't part of the text).
+    var list = typing ? checklist(selKey, true) : checklist(selKey);
     $('dayChecks').textContent = '';
-    if (!typing) $('dayChecks').appendChild(checklist(selKey));
+    $('dayChecks').hidden = !list;
+    if (list) $('dayChecks').appendChild(list);
     $('dayEdit').hidden = isWeek || typing;
     $('dayDone').hidden = isWeek || !typing || !has;
   }
@@ -711,6 +767,14 @@
     parts.push(plural(j.notes.length, 'note'));
     parts.push(j.status === 'old' ? 'done ' + fmtDate(j.closed) : 'updated ' + fmtDate(lastActivity(j)));
     b.appendChild(el('div', 'card-meta', parts.join(' · ')));
+    var sum = stageSummary(j);
+    if (sum && j.status === 'active') {
+      b.appendChild(el('div', 'card-stage' + (sum.late ? ' late' : sum.all ? ' all' : ''), sum.text));
+      var bar = el('div', 'bar'), fill = el('span');
+      fill.style.width = sum.pct + '%';
+      bar.appendChild(fill);
+      b.appendChild(bar);
+    }
     var last = latestNote(j);
     if (last) b.appendChild(el('div', 'card-snip', firstLine(last.text)));
     b.addEventListener('click', function () { openJob(j.id); });
@@ -858,6 +922,253 @@
   $('newJobGo').addEventListener('click', addJobFromInput);
   $('newJobTitle').addEventListener('keydown', function (e) { if (e.key === 'Enter') addJobFromInput(); });
 
+  // ---------- stages (job timeline) ----------
+  // A job can have stages (quotation, printing, ...). Not every job needs every
+  // stage, so a job starts with none and the user taps the ones it needs from a
+  // list of names (data.stageLib, editable in settings). Stage = { id, name,
+  // done, doneAt 'YYYY-MM-DD', due 'YYYY-MM-DD' }.
+  var DEFAULT_STAGES = ['Quotation', 'Jobsheet created', 'Printing', 'Inserting',
+    'Ready for delivery', 'Delivery date', 'Delivered', 'Billing'];
+  var stageUi = { addOpen: false, newOpen: false, editId: null };
+
+  function isDay(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v); }
+  function stageLib() { return Array.isArray(data.stageLib) ? data.stageLib : DEFAULT_STAGES.slice(); }
+  function libIndex(name) {
+    var lib = stageLib(), n = name.toLowerCase();
+    for (var i = 0; i < lib.length; i++) if (lib[i].toLowerCase() === n) return i;
+    return -1;
+  }
+  function fmtDay(k) {
+    var d = keyToDate(k);
+    return d.getDate() + ' ' + MON[d.getMonth()] + (d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : '');
+  }
+  function stageLate(st) { return !st.done && st.due && st.due < dayKey(new Date()); }
+
+  function addStage(j, name) {
+    name = name.trim();
+    if (!name) return;
+    j.stages = j.stages || [];
+    var n = name.toLowerCase();
+    if (j.stages.some(function (s) { return s.name.toLowerCase() === n; })) return;
+    var li = libIndex(name);
+    if (li < 0) {
+      data.stageLib = stageLib().concat([name]); // remember new names for next time
+      li = data.stageLib.length - 1;
+    }
+    // Keep stages in list order, whatever order they were tapped in.
+    var pos = j.stages.length;
+    for (var i = 0; i < j.stages.length; i++) {
+      if (libIndex(j.stages[i].name) > li) { pos = i; break; }
+    }
+    j.stages.splice(pos, 0, { id: uid(), name: name, done: false, doneAt: null, due: null });
+  }
+  function toggleStage(st) {
+    st.done = !st.done;
+    st.doneAt = st.done ? dayKey(new Date()) : null;
+  }
+  function copyStages(j) {
+    return (j.stages || []).map(function (s) { return { id: uid(), name: s.name, done: false, doneAt: null, due: null }; });
+  }
+
+  // Short progress line for a job card, e.g. "Next: Printing · 2/5".
+  function stageSummary(j) {
+    var st = j.stages || [];
+    if (!st.length) return null;
+    var done = st.filter(function (s) { return s.done; }).length;
+    var late = st.filter(stageLate)[0];
+    var next = st.filter(function (s) { return !s.done; })[0];
+    var text = late ? 'Late: ' + late.name + ' (due ' + fmtDay(late.due) + ')'
+      : next ? 'Next: ' + next.name + (next.due ? ' (due ' + fmtDay(next.due) + ')' : '')
+        : 'All stages done';
+    return { text: text + ' · ' + done + '/' + st.length, pct: Math.round(100 * done / st.length), late: !!late, all: !next };
+  }
+
+  function renderStages(j) {
+    var box = $('stages');
+    box.textContent = '';
+    var stages = j.stages || [];
+    var nextIdx = -1;
+    for (var i = 0; i < stages.length; i++) if (!stages[i].done) { nextIdx = i; break; }
+    stages.forEach(function (st, i) {
+      var row = el('div', 'stage' + (st.done ? ' done' : '') + (i === nextIdx ? ' next' : '') + (i === stages.length - 1 ? ' last' : ''));
+      row.dataset.id = st.id;
+      var dot = btn('', 'st-dot', function () {
+        toggleStage(st);
+        save();
+        renderJob();
+      });
+      dot.setAttribute('aria-label', (st.done ? 'Untick ' : 'Tick ') + st.name);
+      var main = el('div', 'st-main');
+      main.appendChild(el('div', 'st-name', st.name));
+      var sub = st.done ? (st.doneAt ? 'Done ' + fmtDay(st.doneAt) : 'Done')
+        : st.due ? (st.due === dayKey(new Date()) ? 'Due today' : 'Due ' + fmtDay(st.due)) : '';
+      if (sub) main.appendChild(el('div', 'st-sub' + (stageLate(st) ? ' late' : ''), sub));
+      var more = btn(stageUi.editId === st.id ? 'Close' : 'Edit', 'link st-more', function () {
+        stageUi.editId = stageUi.editId === st.id ? null : st.id;
+        renderJob();
+      });
+      row.appendChild(dot);
+      row.appendChild(main);
+      row.appendChild(more);
+      box.appendChild(row);
+      if (stageUi.editId === st.id) box.appendChild(stageEditor(j, st, i));
+    });
+
+    // Adding stages
+    var add = $('stageAdd');
+    add.textContent = '';
+    var open = !stages.length || stageUi.addOpen;
+    if (!open) {
+      add.appendChild(btn('+ Add a stage', 'link', function () { stageUi.addOpen = true; renderJob(); }));
+      return;
+    }
+    if (!stages.length) add.appendChild(el('div', 'muted tiny', 'Tap the stages this job needs. You can add or remove them any time.'));
+    var have = stages.map(function (s) { return s.name.toLowerCase(); });
+    var chips = el('div', 'chips');
+    stageLib().forEach(function (n) {
+      if (have.indexOf(n.toLowerCase()) >= 0) return;
+      chips.appendChild(btn('+ ' + n, 'chip', function () {
+        stageUi.addOpen = true; // keep the chips open to add several
+        addStage(j, n);
+        save();
+        renderJob();
+      }));
+    });
+    chips.appendChild(btn('+ New stage', 'chip new', function () { stageUi.newOpen = true; renderJob(); $('stageNewName').focus(); }));
+    add.appendChild(chips);
+    if (stageUi.newOpen) {
+      var row = el('div', 'add-row stage-new');
+      var inp = el('input');
+      inp.id = 'stageNewName';
+      inp.placeholder = 'Stage name, e.g. Proof approved';
+      inp.autocomplete = 'off';
+      var go = function () {
+        if (!inp.value.trim()) return;
+        stageUi.addOpen = true;
+        addStage(j, inp.value);
+        stageUi.newOpen = false;
+        save();
+        renderJob();
+      };
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+      row.appendChild(inp);
+      row.appendChild(btn('Add', 'primary', go));
+      add.appendChild(row);
+    }
+    if (stages.length) {
+      add.appendChild(btn('Done adding', 'link', function () {
+        stageUi.addOpen = false;
+        stageUi.newOpen = false;
+        renderJob();
+      }));
+    }
+  }
+
+  function stageEditor(j, st, i) {
+    var ed = el('div', 'st-edit');
+    function field(label, input) {
+      var l = el('label');
+      l.appendChild(el('span', null, label));
+      l.appendChild(input);
+      ed.appendChild(l);
+      return input;
+    }
+    var name = el('input');
+    name.value = st.name;
+    name.autocomplete = 'off';
+    field('Name', name).addEventListener('change', function () {
+      var v = name.value.trim();
+      if (v) { st.name = v; save(); }
+      renderJob();
+    });
+    var due = el('input');
+    due.type = 'date';
+    due.value = st.due || '';
+    field('Due date', due).addEventListener('change', function () {
+      st.due = isDay(due.value) ? due.value : null;
+      save();
+      renderJob();
+    });
+    if (st.done) {
+      var doneAt = el('input');
+      doneAt.type = 'date';
+      doneAt.value = st.doneAt || '';
+      field('Done on', doneAt).addEventListener('change', function () {
+        st.doneAt = isDay(doneAt.value) ? doneAt.value : null;
+        save();
+        renderJob();
+      });
+    }
+    var btns = el('div', 'btns');
+    function move(delta) {
+      var k = i + delta;
+      if (k < 0 || k >= j.stages.length) return;
+      j.stages.splice(k, 0, j.stages.splice(i, 1)[0]);
+      save();
+      renderJob();
+    }
+    var up = btn('Move up', 'small', function () { move(-1); });
+    up.disabled = i === 0;
+    var down = btn('Move down', 'small', function () { move(1); });
+    down.disabled = i === j.stages.length - 1;
+    btns.appendChild(up);
+    btns.appendChild(down);
+    btns.appendChild(btn('Remove', 'small danger', function () {
+      j.stages = j.stages.filter(function (s) { return s !== st; });
+      stageUi.editId = null;
+      save();
+      renderJob();
+    }));
+    ed.appendChild(btns);
+    return ed;
+  }
+
+  // Stage names list in settings
+  function renderLib() {
+    var box = $('libList');
+    box.textContent = '';
+    var lib = stageLib();
+    lib.forEach(function (n, i) {
+      var row = el('div', 'lib-row');
+      row.appendChild(el('span', null, n));
+      var up = btn('↑', 'small', function () { libMove(i, -1); });
+      up.disabled = i === 0;
+      up.setAttribute('aria-label', 'Move ' + n + ' up');
+      var down = btn('↓', 'small', function () { libMove(i, 1); });
+      down.disabled = i === lib.length - 1;
+      down.setAttribute('aria-label', 'Move ' + n + ' down');
+      var del = btn('×', 'small danger', function () {
+        data.stageLib = stageLib().filter(function (x) { return x !== n; });
+        save();
+        renderLib();
+      });
+      del.setAttribute('aria-label', 'Remove ' + n);
+      row.appendChild(up);
+      row.appendChild(down);
+      row.appendChild(del);
+      box.appendChild(row);
+    });
+    if (!lib.length) box.appendChild(el('p', 'muted tiny', 'No stage names. Add some below.'));
+  }
+  function libMove(i, delta) {
+    var lib = stageLib().slice(), k = i + delta;
+    if (k < 0 || k >= lib.length) return;
+    lib.splice(k, 0, lib.splice(i, 1)[0]);
+    data.stageLib = lib;
+    save();
+    renderLib();
+  }
+  function libAdd() {
+    var v = $('libNew').value.trim();
+    if (!v || libIndex(v) >= 0) { $('libNew').value = ''; return; }
+    data.stageLib = stageLib().concat([v]);
+    $('libNew').value = '';
+    save();
+    renderLib();
+  }
+  $('libAdd').addEventListener('click', libAdd);
+  $('libNew').addEventListener('keydown', function (e) { if (e.key === 'Enter') libAdd(); });
+
   // ---------- job detail ----------
   var openId = null;
   var editingNoteId = null;
@@ -865,6 +1176,7 @@
   function openJob(id) {
     flushAll();
     openId = id;
+    stageUi = { addOpen: false, newOpen: false, editId: null };
     editingNoteId = null;
     $('prevToggle').checked = false;
     $('noteNew').value = '';
@@ -912,6 +1224,7 @@
       : j.month
         ? 'When done, it will be listed under ' + monthLabel(j.month) + ' in Old jobs.'
         : 'Optional. When done, it will be listed under the month you finish it, unless you pick a month here.';
+    renderStages(j);
 
     // Notes from the other rounds of a recurring job.
     var others = s.filter(function (x) { return x !== j && x.notes.length; }).reverse();
@@ -1020,6 +1333,7 @@
     j.closed = nowIso();
     if (!j.month) j.month = monthKey(new Date());
     var next = repeat ? newJob(j.title, j.seriesId) : null;
+    if (next && j.stages) next.stages = copyStages(j);
     if (next && typeof j.rank === 'number') next.rank = j.rank;
     save();
     if (next) { openJob(next.id); toast('Next round started. Old notes are under "Show previous notes".'); }
@@ -1027,6 +1341,7 @@
   }
   function startRound(j) {
     var next = newJob(j.title, j.seriesId);
+    if (j.stages) next.stages = copyStages(j);
     save();
     showTab('active');
     openJob(next.id);
@@ -1089,6 +1404,7 @@
   $('setBack').addEventListener('click', closeSettings);
 
   function renderSettings() {
+    renderLib();
     var lb = localStorage.getItem(KEY_BACKUP), d = daysSinceBackup();
     $('backupInfo').textContent = lb
       ? 'Last backup: ' + fmtDate(lb) + (d === 0 ? ' (today)' : ' (' + plural(d, 'day') + ' ago)') + '.'

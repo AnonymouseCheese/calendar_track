@@ -59,7 +59,7 @@ The user's rule: **data must never be wiped when the app is updated.**
 
 1. Bump `?v=N` on **every** asset in `index.html`.
 2. In `sw.js`, bump `CACHE` (`ct-vN`) and the `?v=N` entries in `SHELL` to match.
-3. Run all three test suites (below). Each must print `ALL PASSED`.
+3. Run all four test suites (below). Each must print `ALL PASSED`.
 4. Commit and push (DEPLOY.md, Case 1). Pages updates in ~1-2 min, and the
    phone picks it up on the next open while online.
 
@@ -73,6 +73,7 @@ cd .. && python -m http.server 8765 --bind 127.0.0.1
 # terminal 2:
 node test.js           # 103 feature checks, drives real Edge at iPhone size
 node test_drag.js      # 12 checks: drag-to-reorder Active jobs with a real mouse
+node test_stages.js    # 30 checks: job stages / timeline / calendar link / settings list
 node test_upgrade.js   # 17 checks: ships a fake next version and proves notes survive
 ```
 
@@ -122,10 +123,23 @@ Screenshots (`s*.png`) land in `tests/` and are gitignored.
 - [x] Bug fixed: a garbled CSS escape showed "BE" before the month names
       (the shell mangled backslashes). Write file content with the Write tool, not heredocs.
 
-### Designing next
-- [ ] Job timeline / milestones (quotation, jobsheet, printing, inserting,
-      ready, delivery date, delivered, billing). The user doesn't have a fixed
-      list. Design proposed 2026-11-15 and waiting on the user's answer.
+- [x] v6 (2026-11-15): job stages / timeline. The user said "not all jobs have the same
+      process, your design, just easy to use", so:
+      - A job starts with NO stages. Tap chips (from `data.stageLib`, defaulting
+        to DEFAULT_STAGES in app.js) to add only the stages it needs. "+ New stage"
+        adds a one-off name, which is remembered as a chip. Chips stay open until
+        "Done adding".
+      - Stages are kept in list order whatever order they're tapped in. Each stage can
+        be moved up/down, renamed or removed via its Edit button.
+      - Tap the circle to tick, which stamps `doneAt` = today (editable). Optional `due`
+        date, red when late.
+      - The Active job card shows "Next: X (due ..) · n/m" or "Late: ..." plus a progress bar.
+      - Stage due dates (active jobs only) appear on the calendar as tickable items
+        (diamond marker), synced both ways, and counted in "N left" / month boxes.
+      - "Next round" copies the stage names, unticked and with no dates.
+      - Settings > Job stages: add / remove / reorder the chip list.
+      - Data: `job.stages[] = {id,name,done,doneAt,due}`, `data.stageLib[]`. Additive,
+        so no SCHEMA bump was needed (older code keeps unknown fields).
 
 ### To do next
 - [ ] User installs on iPhone: Safari > Share > Add to Home Screen, sets password, saves recovery code

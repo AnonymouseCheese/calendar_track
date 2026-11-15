@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 
@@ -140,6 +140,12 @@
     <input id="jobTitle" class="title-input" aria-label="Job title" autocomplete="off">
     <div id="jobMeta" class="muted tiny"></div>
 
+    <div class="stages-wrap">
+      <div class="stages-title">Stages</div>
+      <div id="stages" class="stages"></div>
+      <div id="stageAdd"></div>
+    </div>
+
     <label class="month-row">
       <span>Month</span>
       <input id="jobMonth" type="month">
@@ -201,6 +207,14 @@
       <button id="pwSave" class="primary wide" type="button">Save new password</button>
     </div>
 
+    <h3>Job stages</h3>
+    <p class="muted tiny">The stages you can pick from when setting up a job. Changing this list doesn't change existing jobs.</p>
+    <div id="libList"></div>
+    <div class="add-row">
+      <input id="libNew" placeholder="New stage name" autocomplete="off">
+      <button id="libAdd" class="primary" type="button">Add</button>
+    </div>
+
     <h3>On this phone</h3>
     <p id="storageInfo" class="muted tiny"></p>
   </div>
@@ -208,6 +222,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
